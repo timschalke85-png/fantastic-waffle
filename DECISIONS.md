@@ -21,6 +21,25 @@ Newest first.
   Conservative choice: re-verify Fase 3's acceptance (tests + build green) and
   proceed to Fase 4 and Fase 5. No Fase 3 changes made.
 
+## Fase 6 (framework only — test phase)
+
+- **Scope.** Tim authorised starting Fase 6 "in testfase / framework". Built the
+  pure, unit-tested core and a gated entry point; the full interactive bracket
+  picker UI + DB persistence is deliberately left for Fase 6 proper.
+- **No invented facts.** The bracket tree (`prisma/data/ko-bracket.ts`, FIFA
+  matches 89–104 → which earlier match's winner/loser feeds each slot) is
+  transcribed verbatim from the per-match feeder annotations already in the
+  Fase-1-verified `ko-schedule.ts` ("89 = W74 v W77", "103 = L101 v L102", …),
+  themselves cross-checked FIFA Match Schedule vs Wikipedia. No new tournament
+  data was sourced — WebFetch is denied this session, so anything that would
+  require fresh sourcing/cross-checking was NOT added.
+- **Engine.** `src/lib/knockout-bracket.ts`: `resolveTie` (propagate picks),
+  `validateKnockoutPicks` (the acceptance check "impossible brackets cannot be
+  saved"), `downstreamOf` (cascade-clear set). 11 unit tests. The future save
+  action will gate on `validateKnockoutPicks`.
+- **Gating.** `/voorspellen` shows only a "nog niet geopend" notice while
+  `settings.knockout_open = false`; nothing knockout-related is live.
+
 ## Fase 5
 
 - **Participant session without a new env secret.** The session cookie carries

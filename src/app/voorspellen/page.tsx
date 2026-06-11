@@ -7,6 +7,7 @@ import { loadPredictionForm } from "@/lib/predictions";
 import { LoginForm } from "@/components/voorspellen/LoginForm";
 import { PredictionForm } from "@/components/voorspellen/PredictionForm";
 import { fmtDateTimeAms } from "@/lib/format";
+import { isKnockoutOpen, getKnockoutLockUtc } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,38 @@ async function Loaded({
         </p>
       )}
       <PredictionForm data={data} participant={participant!} />
+      <KnockoutPanel />
     </>
+  );
+}
+
+// Fase 6 framework (test phase): the knockout prediction flow is gated behind
+// settings.knockout_open. Until the admin opens it (~28 June, once all group
+// matches are final and the R32 teams are known), this is just a status notice.
+// The bracket engine (src/lib/knockout-bracket.ts) is built and unit-tested; the
+// interactive picker UI is the remainder of Fase 6.
+async function KnockoutPanel() {
+  const open = await isKnockoutOpen();
+  if (!open) {
+    return (
+      <section className="mt-6 rounded-lg border border-dashed border-brand-ink/20 p-4">
+        <h2 className="text-sm font-semibold">Knock-out voorspelronde</h2>
+        <p className="mt-1 text-[12px] text-brand-ink/55">
+          Nog niet geopend. Deze ronde opent zodra alle groepswedstrijden gespeeld zijn en de zestiende
+          finales bekend zijn (rond 28 juni). Je krijgt dan bericht en kunt hier je volledige knock-out
+          bracket invullen.
+        </p>
+      </section>
+    );
+  }
+  const lock = await getKnockoutLockUtc();
+  return (
+    <section className="mt-6 rounded-lg border border-brand-accent/50 p-4">
+      <h2 className="text-sm font-semibold">Knock-out voorspelronde — geopend</h2>
+      <p className="mt-1 text-[12px] text-brand-ink/55">
+        {lock ? <>Bewerkbaar tot {fmtDateTimeAms(lock.toISOString())} (Europe/Amsterdam).</> : "Open."} De
+        interactieve bracket-picker wordt in Fase 6 afgerond.
+      </p>
+    </section>
   );
 }
