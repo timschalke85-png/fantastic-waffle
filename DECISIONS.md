@@ -12,6 +12,15 @@ Newest first.
   parse the R32 table) are gitignored; the validated output
   `prisma/data/r32-allocation.generated.json` is committed as the source of truth.
 
+## Session resume (Fase 3 already complete)
+
+- **Fase 3 was already built and committed** (`957a607`) in a prior unattended
+  session; the working tree was clean and the full suite (41 tests) green on
+  re-run. This session's brief listed Fase 3→4→5, but re-implementing a verified,
+  committed phase from scratch would risk regressing working code for no benefit.
+  Conservative choice: re-verify Fase 3's acceptance (tests + build green) and
+  proceed to Fase 4 and Fase 5. No Fase 3 changes made.
+
 ## Fase 3
 
 - **Branding fallback.** `/branding` is absent (no `brand.md`, no `logo.*`). Per

@@ -4,7 +4,8 @@
       "Edit", "Write",
       "Bash(npm install*)", "Bash(npm run*)", "Bash(npx prisma*)",
       "Bash(npx tsx*)", "Bash(npx vitest*)", "Bash(npx next*)",
-      "Bash(git add*)", "Bash(git commit*)", "Bash(git status*)", "Bash(git diff*)"
+      "Bash(git add*)", "Bash(git commit*)", "Bash(git status*)", "Bash(git diff*)",
+      "Bash(git log*)", "Bash(git ls-files*)", "Bash(git branch*)", "Bash(git rev-parse*)", "Bash(git show*)"
     ],
     "deny": [
       "Read(./.env)", "Read(./.env.*)",
