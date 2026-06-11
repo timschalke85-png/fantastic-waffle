@@ -21,6 +21,34 @@ Newest first.
   Conservative choice: re-verify Fase 3's acceptance (tests + build green) and
   proceed to Fase 4 and Fase 5. No Fase 3 changes made.
 
+## Fase 5
+
+- **Participant session without a new env secret.** The session cookie carries
+  `${id}.sha256(id+pin_hash)`. Because `pin_hash` is a server-only bcrypt digest,
+  the token can't be forged without DB access — same shape as the existing
+  admin-auth. Conservative: avoids assuming a `SESSION_SECRET` env var exists.
+- **Eligibility applied uniformly, data-driven.** SCORING.md says ineligible group
+  matches (kickoff < group_lock_utc) are "not shown in the form, never scored".
+  FASEN Fase 5 phrases Poule F as "the six matches". Reconciled by rendering only
+  matches with `kickoff_utc >= group_lock_utc` for *every* group including F, read
+  from real kickoffs at runtime (no hard-coded assumption about which qualify). If
+  all six Poule F matches are at/after the lock they all appear; any pre-lock one
+  is excluded to honour the fairness rule. NL–Japan (at the lock) is eligible.
+- **Identity name fields at registration.** `volledige naam` + "toon mijn naam"
+  are captured on first save (account creation); returning users edit them via a
+  separate profiel-sectie. The login form only applies them when creating.
+- **Autosave semantics.** Each section autosaves debounced (800ms). A "partial"
+  scoreline (exactly one side filled) is intentionally NOT saved and is not an
+  error — it simply waits until both sides are entered. Empty clears the pick.
+- **vitest.config.ts added** for the `@/*` path alias so the server-action layer
+  can be unit-tested. Additive; existing relative-import tests are unaffected.
+- **No live-DB integration run.** Server actions need a request/cookie context and
+  writing to the production Neon DB would pollute real data, so Fase 5 was
+  validated via pure unit tests (validation rules) + mocked action tests
+  (auth/lock/eligibility/ranking guards) + the type-checking `next build`. A live
+  end-to-end smoke test (register, save, reload, lock) is left for Tim — see
+  NACHTRAPPORT.
+
 ## Fase 3
 
 - **Branding fallback.** `/branding` is absent (no `brand.md`, no `logo.*`). Per
