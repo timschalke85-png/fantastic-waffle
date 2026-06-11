@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit", "Write",
+      "Bash(npm install*)", "Bash(npm run*)", "Bash(npx prisma*)",
+      "Bash(npx tsx*)", "Bash(npx vitest*)", "Bash(npx next*)",
+      "Bash(git add*)", "Bash(git commit*)", "Bash(git status*)", "Bash(git diff*)"
+    ],
+    "deny": [
+      "Read(./.env)", "Read(./.env.*)",
+      "Bash(cat .env*)", "Bash(type .env*)",
+      "Bash(git push*)",
+      "Bash(vercel*)",
+      "WebFetch"
+    ]
+  }
+}

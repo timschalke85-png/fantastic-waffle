@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Brand tokens. Neutral placeholders + the WK oranje accent, per CLAUDE.md:
+ * never approximate the Van Saaze logo or guess brand colors. Once
+ * /branding/brand.md lands, replace these values only.
+ */
+:root {
+  --brand-primary: #0f172a; /* placeholder ink/navy */
+  --brand-accent: #ff7a00; /* WK oranje */
+  --brand-surface: #ffffff;
+  --brand-ink: #0f172a;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--brand-surface);
+  color: var(--brand-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scoreboard-style numerals: tabular figures for scores/standings. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

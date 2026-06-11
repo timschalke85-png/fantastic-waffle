@@ -1,0 +1,223 @@
+// Prisma schema — WK 2026 Poule (Hotel van Saaze)
+// Mirrors DATAMODEL.md. All timestamps are UTC (timestamptz). Display layer
+// converts to Europe/Amsterdam; nothing here stores local time.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Runtime queries go through Neon's pooled (PgBouncer) endpoint.
+  url       = env("DATABASE_URL")
+  // Migrations need a direct (unpooled) connection — PgBouncer can't run them.
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Stage {
+  GROUP
+  R32
+  R16
+  QF
+  SF
+  THIRD_PLACE
+  FINAL
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+}
+
+model Participant {
+  id           String   @id @default(cuid())
+  nickname     String   @unique
+  // Case-insensitive uniqueness is enforced via a raw migration index
+  // (citext-style lower() unique index); see migration SQL.
+  nicknameKey  String   @unique @map("nickname_key") // lower(nickname), app-maintained
+  fullName     String?  @map("full_name")
+  showFullName Boolean  @default(false) @map("show_full_name")
+  pinHash      String   @map("pin_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  groupMatchPredictions PredictionGroupMatch[]
+  groupRankPredictions  PredictionGroupRank[]
+  teamGoalsPredictions  PredictionTeamGoals[]
+  knockoutPredictions   PredictionKnockout[]
+  score                 Score?
+
+  @@map("participants")
+}
+
+model Team {
+  id          String  @id @default(cuid())
+  apiTeamId   Int     @unique @map("api_team_id")
+  fifaCode    String  @map("fifa_code") // e.g. NED, JPN
+  nameNl      String  @map("name_nl") // Dutch display name, e.g. "Nederland"
+  nameEn      String  @map("name_en") // provider name, kept for matching/debug
+  groupLetter String  @map("group_letter") @db.Char(1) // A–L
+  crestUrl    String? @map("crest_url")
+  flagEmoji   String? @map("flag_emoji")
+
+  homeMatches              Match[]               @relation("HomeTeam")
+  awayMatches              Match[]               @relation("AwayTeam")
+  penaltyWins              Match[]               @relation("PenaltyWinner")
+  groupRankPredictions     PredictionGroupRank[]
+  teamGoalsPredictions     PredictionTeamGoals[]
+  knockoutHomePredictions  PredictionKnockout[]  @relation("PredHome")
+  knockoutAwayPredictions  PredictionKnockout[]  @relation("PredAway")
+  knockoutWinnerPredictions PredictionKnockout[] @relation("PredWinner")
+
+  @@index([groupLetter])
+  @@map("teams")
+}
+
+model Match {
+  id                   String      @id @default(cuid())
+  apiMatchId           Int         @unique @map("api_match_id")
+  stage                Stage
+  groupLetter          String?     @map("group_letter") @db.Char(1) // group stage only
+  bracketSlot          String?     @unique @map("bracket_slot") // canonical FIFA match number as string, e.g. "75" (knockout only; null for group)
+  homeTeamId           String?     @map("home_team_id")
+  awayTeamId           String?     @map("away_team_id")
+  kickoffUtc           DateTime    @map("kickoff_utc") @db.Timestamptz(6)
+  venue                String?
+  status               MatchStatus @default(SCHEDULED)
+  homeScore            Int?        @map("home_score") // full-time incl. extra time
+  awayScore            Int?        @map("away_score")
+  wentToExtraTime      Boolean     @default(false) @map("went_to_extra_time")
+  penaltyWinnerTeamId  String?     @map("penalty_winner_team_id")
+  manuallyOverridden   Boolean     @default(false) @map("manually_overridden")
+  updatedAt            DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  homeTeam       Team? @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam       Team? @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  penaltyWinner  Team? @relation("PenaltyWinner", fields: [penaltyWinnerTeamId], references: [id])
+
+  groupMatchPredictions PredictionGroupMatch[]
+
+  @@index([stage])
+  @@index([groupLetter])
+  @@index([kickoffUtc])
+  @@map("matches")
+}
+
+// All eligible group matches, every group. Outcome 1/X/2 is derived, never stored.
+// Eligible = kickoff_utc >= settings.group_lock_utc (enforced on write + in scoring).
+model PredictionGroupMatch {
+  id            String @id @default(cuid())
+  participantId String @map("participant_id")
+  matchId       String @map("match_id")
+  homeGoals     Int    @map("home_goals")
+  awayGoals     Int    @map("away_goals")
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  match       Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, matchId])
+  @@map("predictions_group_match")
+}
+
+// Poule F: positions 1–4. Other groups: positions 1–2 only (enforced in app layer).
+model PredictionGroupRank {
+  id            String @id @default(cuid())
+  participantId String @map("participant_id")
+  groupLetter   String @map("group_letter") @db.Char(1)
+  position      Int // 1–4
+  teamId        String @map("team_id")
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id])
+
+  @@unique([participantId, groupLetter, position])
+  @@map("predictions_group_rank")
+}
+
+// Poule F teams only: total goals scored by a team across its 3 group matches.
+model PredictionTeamGoals {
+  id            String @id @default(cuid())
+  participantId String @map("participant_id")
+  teamId        String @map("team_id")
+  goals         Int // >= 0
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id])
+
+  @@unique([participantId, teamId])
+  @@map("predictions_team_goals")
+}
+
+model PredictionKnockout {
+  id            String  @id @default(cuid())
+  participantId String  @map("participant_id")
+  bracketSlot   String  @map("bracket_slot") // canonical FIFA match number as string, e.g. "75"
+  homeTeamId    String? @map("home_team_id")
+  awayTeamId    String? @map("away_team_id")
+  homeGoals     Int?    @map("home_goals")
+  awayGoals     Int?    @map("away_goals")
+  winnerTeamId  String? @map("winner_team_id") // must equal home or away
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  homeTeam    Team?       @relation("PredHome", fields: [homeTeamId], references: [id])
+  awayTeam    Team?       @relation("PredAway", fields: [awayTeamId], references: [id])
+  winnerTeam  Team?       @relation("PredWinner", fields: [winnerTeamId], references: [id])
+
+  @@unique([participantId, bracketSlot])
+  @@map("predictions_knockout")
+}
+
+// Cache, fully recomputable from raw predictions + finished matches.
+model Score {
+  id                  String   @id @default(cuid())
+  participantId       String   @unique @map("participant_id")
+  pointsGroupF        Int      @default(0) @map("points_group_f")
+  pointsOtherGroups   Int      @default(0) @map("points_other_groups")
+  pointsKnockout      Int      @default(0) @map("points_knockout")
+  pointsTotal         Int      @default(0) @map("points_total")
+  exactCount          Int      @default(0) @map("exact_count") // tiebreak
+  computedAt          DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@map("scores")
+}
+
+// Key/value settings. Typed accessors live in src/lib/settings.ts.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("settings")
+}
+
+// Static seed: official FIFA mapping from group results to R32 slots, including
+// the third-place allocation table. Seeded from FIFA's official schedule and
+// cross-checked against Wikipedia before committing (CLAUDE.md Hard rule 1).
+model R32Allocation {
+  bracketSlot   String @id @map("bracket_slot") // canonical FIFA match number as string, e.g. "75"
+  matchNumber   Int    @map("match_number") // official FIFA match number (73–88)
+  homeSource    String @map("home_source") // e.g. "1A", "2B"
+  awaySource    String @map("away_source") // e.g. "3rd" pool token or "2C"
+  // For slots fed by a third-placed team, which set of groups that 3rd can come
+  // from, and the FIFA combination table that resolves it. JSON-encoded.
+  thirdPlacePool Json?  @map("third_place_pool")
+
+  @@map("r32_allocation")
+}
+
+// The FIFA third-place allocation combination table (which of the 8 qualifying
+// third-placed teams, by their groups, maps to which R32 slot). One row per
+// possible combination of the 8 groups that produce a 3rd-placed qualifier.
+model ThirdPlaceCombination {
+  id          String @id @default(cuid())
+  // Sorted set of the 8 group letters whose 3rd-placed teams qualified,
+  // e.g. "ABCDEF GH" normalized as "A,B,C,D,E,F" -> stored sorted, comma-free key.
+  groupsKey   String @unique @map("groups_key") // e.g. "ABCDEFGH"
+  // Mapping of R32 slot -> which group's 3rd-placed team it receives.
+  // JSON: { "R32-02": "A", "R32-05": "D", ... } (8 entries).
+  assignment  Json
+
+  @@map("third_place_combinations")
+}
