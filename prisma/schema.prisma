@@ -178,7 +178,8 @@ model Score {
   pointsOtherGroups   Int      @default(0) @map("points_other_groups")
   pointsKnockout      Int      @default(0) @map("points_knockout")
   pointsTotal         Int      @default(0) @map("points_total")
-  exactCount          Int      @default(0) @map("exact_count") // tiebreak
+  exactCount          Int      @default(0) @map("exact_count") // tiebreak 1
+  groupFCorrectItems  Int      @default(0) @map("group_f_correct_items") // tiebreak 2
   computedAt          DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
 
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)

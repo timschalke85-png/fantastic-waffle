@@ -9,12 +9,15 @@ Approved by Tim, 11 June 2026. Implemented in `src/config/scoring.ts` as the sin
 - All group predictions lock at the global deadline (2026-06-14 20:00 UTC). Knockout predictions lock at first R32 kickoff.
 - Ties on total points in the leaderboard are broken, in order, by:
   1. **More exact scorelines (`exactCount`).** The number of *matches* whose exact
-     scoreline was predicted correctly, counted across Poule F + the other groups +
-     the knockout (knockout counts). "Exact" means the predicted goals equal the
-     actual end-of-play goals; for knockout it is judged per-team
-     (orientation-independent) and does not require the winner to be correct. Only
-     scoreable matches count (group: FINISHED and eligible; knockout: FINISHED).
-     Team-goals are not scorelines and do not count here.
+     scoreline was predicted correctly, across Poule F + the other groups + the
+     knockout. "Exact" uses **one definition across scoring and tiebreaks**: the
+     predicted goals equal the actual end-of-play goals (shoot-outs are not part of
+     the scoreline). In the knockout the scoreline is judged **orientation-independently**
+     (home/away order doesn't matter) and — exactly like the §3 exact-score bonus —
+     a knockout match counts as exact **only when the predicted winner is also
+     correct**, so a tie decided on penalties needs the right shoot-out winner too.
+     Only scoreable matches count (group: FINISHED and eligible; knockout: FINISHED).
+     Team-goals are not scorelines and don't count.
   2. **More correct Group F items (`groupFCorrectItems`).** Of the **14** Poule F
      items — the 6 Poule F matches + 4 team-goals + 4 eindstand positions (the +3
      all-four bonus is not a separate item) — how many *scored points*. A match item

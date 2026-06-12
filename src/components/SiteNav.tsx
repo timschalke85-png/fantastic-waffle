@@ -1,11 +1,11 @@
 // Slim public navigation. Only links to routes that exist (extended per fase).
 import Link from "next/link";
 
-// Extended per fase as routes land (Klassement arrives in Fase 7).
 const LINKS: { href: string; label: string }[] = [
   { href: "/", label: "Overzicht" },
   { href: "/scenarios", label: "Scenario's" },
   { href: "/voorspellen", label: "Voorspellen" },
+  { href: "/klassement", label: "Klassement" },
 ];
 
 export function SiteNav() {

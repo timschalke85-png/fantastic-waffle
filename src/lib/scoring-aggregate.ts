@@ -235,7 +235,7 @@ export function scoreParticipant(p: ParticipantPredictions, ctx: ScoringContext)
   for (const k of p.knockout) {
     const actual = ctx.knockout.get(k.bracketSlot);
     if (!actual) continue;
-    knockout += scoreKnockoutMatch(
+    const ks = scoreKnockoutMatch(
       {
         homeTeamId: k.homeTeamId,
         awayTeamId: k.awayTeamId,
@@ -245,18 +245,13 @@ export function scoreParticipant(p: ParticipantPredictions, ctx: ScoringContext)
       },
       actual,
       actual.stage,
-    ).total;
-    // Exact knockout scoreline (orientation-independent, winner-independent): both
-    // actual teams predicted and their goals match. Requires the matchup to be right.
-    if (k.homeTeamId && k.awayTeamId && k.homeGoals != null && k.awayGoals != null) {
-      const byTeam = new Map<string, number>([
-        [k.homeTeamId, k.homeGoals],
-        [k.awayTeamId, k.awayGoals],
-      ]);
-      if (byTeam.get(actual.homeTeamId) === actual.homeScore && byTeam.get(actual.awayTeamId) === actual.awayScore) {
-        exactCount++;
-      }
-    }
+    );
+    knockout += ks.total;
+    // One definition of "exact" across scoring + tiebreaks (SCORING.md item 1): a
+    // knockout match counts for exactCount exactly when it earned the exact-score
+    // bonus — i.e. scoreline correct AND winner correct. So a tie decided on
+    // penalties needs the right shoot-out winner too.
+    if (ks.exactBonus > 0) exactCount++;
   }
 
   return {

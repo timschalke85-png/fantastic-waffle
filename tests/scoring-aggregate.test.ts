@@ -188,6 +188,42 @@ describe("Knockout aggregation", () => {
   });
 });
 
+describe("Knockout exactCount — penalty edge (one definition: needs the winner too)", () => {
+  const X = team("x", "XXX", "C");
+  const Y = team("y", "YYY", "C");
+  // R16 tie, level 1-1 at end of play, decided on penalties by Y.
+  const koMatch: MatchRow = {
+    id: "k89",
+    stage: "R16",
+    groupLetter: null,
+    bracketSlot: "89",
+    homeTeamId: "x",
+    awayTeamId: "y",
+    status: "FINISHED",
+    homeScore: 1,
+    awayScore: 1,
+    penaltyWinnerTeamId: "y",
+    kickoffUtc: new Date("2026-07-04T21:00:00Z"),
+  };
+  const ctx = buildScoringContext([X, Y], [koMatch], LOCK);
+  const koPred = (winnerTeamId: string): ParticipantPredictions => ({
+    ...emptyPreds("p"),
+    knockout: [{ bracketSlot: "89", homeTeamId: "x", awayTeamId: "y", homeGoals: 1, awayGoals: 1, winnerTeamId }],
+  });
+
+  it("correct scoreline + correct shoot-out winner -> exactCount counts", () => {
+    const s = scoreParticipant(koPred("y"), ctx);
+    expect(s.exactCount).toBe(1);
+    expect(s.pointsKnockout).toBe(2 + 3 + 3); // matchup + winner + exact bonus
+  });
+
+  it("correct scoreline but WRONG shoot-out winner -> exactCount does NOT count", () => {
+    const s = scoreParticipant(koPred("x"), ctx);
+    expect(s.exactCount).toBe(0);
+    expect(s.pointsKnockout).toBe(2); // matchup only; no winner, no exact bonus
+  });
+});
+
 describe("Idempotency & performance", () => {
   const ctx = buildScoringContext(POULE_F_TEAMS, pouleFMatches(), LOCK);
   const base: ParticipantPredictions = {

@@ -90,6 +90,7 @@ export async function recomputeScores(): Promise<RecomputeResult> {
           pointsKnockout: s.pointsKnockout,
           pointsTotal: s.pointsTotal,
           exactCount: s.exactCount,
+          groupFCorrectItems: s.groupFCorrectItems,
           computedAt,
         },
         update: {
@@ -98,6 +99,7 @@ export async function recomputeScores(): Promise<RecomputeResult> {
           pointsKnockout: s.pointsKnockout,
           pointsTotal: s.pointsTotal,
           exactCount: s.exactCount,
+          groupFCorrectItems: s.groupFCorrectItems,
           computedAt,
         },
       }),
