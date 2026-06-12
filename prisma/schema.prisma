@@ -40,6 +40,9 @@ model Participant {
   showFullName Boolean  @default(false) @map("show_full_name")
   pinHash      String   @map("pin_hash")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Tiebreak #3 (earliest first submission): set once, on the first prediction
+  // save that writes actual content. Nullable; null = not yet submitted.
+  firstSubmittedAt DateTime? @map("first_submitted_at") @db.Timestamptz(6)
 
   groupMatchPredictions PredictionGroupMatch[]
   groupRankPredictions  PredictionGroupRank[]

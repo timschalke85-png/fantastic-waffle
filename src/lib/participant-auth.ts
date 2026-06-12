@@ -124,6 +124,20 @@ export async function updateProfile(
   });
 }
 
+/**
+ * Tiebreak #3 (earliest first submission): stamp `first_submitted_at` exactly
+ * once, on the first prediction save that writes real content. Idempotent — the
+ * `IS NULL` guard makes it set-once and concurrency-safe. Raw SQL so it does not
+ * depend on a regenerated Prisma client; the typed field follows after the
+ * migration + `prisma generate`.
+ *
+ * REQUIRES migration 0002_add_first_submitted_at to be applied first, otherwise
+ * the column does not exist and the save will throw.
+ */
+export async function markFirstSubmission(id: string): Promise<void> {
+  await prisma.$executeRaw`UPDATE participants SET first_submitted_at = now() WHERE id = ${id} AND first_submitted_at IS NULL`;
+}
+
 export async function signOutParticipant(): Promise<void> {
   (await cookies()).delete(COOKIE);
 }

@@ -27,6 +27,7 @@ vi.mock("@/lib/participant-auth", () => ({
   signInOrRegister: vi.fn(),
   signOutParticipant: vi.fn(),
   updateProfile: vi.fn(),
+  markFirstSubmission: vi.fn(),
 }));
 vi.mock("@/lib/settings", () => ({ getGroupLockUtc }));
 vi.mock("@/lib/predictions", () => ({ eligibleGroupMatchIds }));

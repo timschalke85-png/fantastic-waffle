@@ -13,6 +13,7 @@ import {
   signOutParticipant,
   currentParticipant,
   updateProfile,
+  markFirstSubmission,
 } from "@/lib/participant-auth";
 import { eligibleGroupMatchIds } from "@/lib/predictions";
 import { parseScoreline, parseGoals, validateRanking } from "@/lib/predictions-validate";
@@ -81,6 +82,7 @@ export async function saveGroupMatchesAction(
       }),
     ),
   ]);
+  if (toUpsert.length > 0) await markFirstSubmission(guard.id); // set-once on real content
   revalidatePath("/voorspellen");
   return { ok: true };
 }
@@ -118,6 +120,7 @@ export async function saveTeamGoalsAction(
       }),
     ),
   ]);
+  if (toUpsert.length > 0) await markFirstSubmission(guard.id); // set-once on real content
   revalidatePath("/voorspellen");
   return { ok: true };
 }
@@ -149,6 +152,7 @@ export async function saveRankAction(payload: {
       }),
     ),
   ]);
+  if (filled.length > 0) await markFirstSubmission(guard.id); // set-once on real content
   revalidatePath("/voorspellen");
   return { ok: true };
 }
