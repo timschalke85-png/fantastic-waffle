@@ -10,11 +10,13 @@ import { LiveDot } from "@/components/LiveDot";
 import { BrandFooter } from "@/components/BrandFooter";
 import { TeamCrest } from "@/components/TeamCrest";
 import { TodayBoard } from "@/components/TodayBoard";
+import { FavoritesBlock } from "@/components/FavoritesBlock";
+import { loadFavorites } from "@/lib/favorites-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function Overzicht() {
-  const d = await loadDashboard();
+  const [d, favorites] = await Promise.all([loadDashboard(), loadFavorites()]);
   const isLive = d.pouleF.matches.some((m) => m.status === "LIVE");
   const pouleFCountries = d.pouleF.standings.map((r) => r.team.nameNl).join(" · ");
 
@@ -46,26 +48,30 @@ export default async function Overzicht() {
           <span className="text-[10px] text-brand-ink/40">tijden in Europe/Amsterdam</span>
         </div>
 
-        {/* Next NL match — full oranje colour block, bold scoreboard feel (no dark). */}
-        <div className="mt-2 rounded-2xl bg-wk-orange px-5 py-4 text-white shadow-sm">
-          {d.nextNlMatch ? (
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
-                  Volgende wedstrijd Nederland
-                </p>
-                <p className="truncate text-lg font-bold leading-tight">
-                  {teamName(d.nextNlMatch.home)} – {teamName(d.nextNlMatch.away)}
-                </p>
-                <p className="text-[11px] text-white/80">{fmtDateTimeAms(d.nextNlMatch.kickoffUtc)}</p>
-              </div>
-              <div className="shrink-0 text-right text-2xl font-extrabold">
-                <NextMatchCountdown kickoffUtcIso={d.nextNlMatch.kickoffUtc.toISOString()} />
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm font-medium text-white/90">Geen aankomende wedstrijd voor Nederland.</p>
-          )}
+        {/* Two equal colour blocks: favourites (left) + next NL match (right). Stack on mobile. */}
+        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <FavoritesBlock data={favorites} />
+
+          <div className="flex h-full flex-col justify-between rounded-2xl bg-wk-orange px-5 py-4 text-white shadow-sm">
+            {d.nextNlMatch ? (
+              <>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
+                    Volgende wedstrijd Nederland
+                  </p>
+                  <p className="truncate text-lg font-bold leading-tight">
+                    {teamName(d.nextNlMatch.home)} – {teamName(d.nextNlMatch.away)}
+                  </p>
+                  <p className="text-[11px] text-white/80">{fmtDateTimeAms(d.nextNlMatch.kickoffUtc)}</p>
+                </div>
+                <div className="mt-3 text-2xl font-extrabold">
+                  <NextMatchCountdown kickoffUtcIso={d.nextNlMatch.kickoffUtc.toISOString()} />
+                </div>
+              </>
+            ) : (
+              <p className="text-sm font-medium text-white/90">Geen aankomende wedstrijd voor Nederland.</p>
+            )}
+          </div>
         </div>
       </header>
 
