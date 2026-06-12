@@ -22,7 +22,10 @@ export default async function Overzicht() {
       <header className="mb-5">
         <div className="flex items-center justify-between gap-3 rounded-xl bg-brand-olive px-4 py-3 text-white">
           <div className="flex min-w-0 items-center gap-3">
-            <BrandLogo className="h-9 w-auto shrink-0" />
+            {/* White chip behind the logo so the green-gold mark stays legible on olive. */}
+            <span className="flex shrink-0 items-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
+              <BrandLogo className="h-8 w-auto" />
+            </span>
             <div className="min-w-0">
               <h1 className="text-lg font-bold leading-tight">Poule F</h1>
               <p className="truncate text-[11px] text-white/70">{pouleFCountries}</p>
@@ -41,25 +44,25 @@ export default async function Overzicht() {
           <span className="text-[10px] text-brand-ink/40">tijden in Europe/Amsterdam</span>
         </div>
 
-        {/* Next NL match countdown — kept, restyled with an oranje accent. */}
-        <div className="mt-2 rounded-lg border-l-4 border-wk-orange bg-brand-ink px-4 py-3 text-white">
+        {/* Next NL match — full oranje colour block, bold scoreboard feel (no dark). */}
+        <div className="mt-2 rounded-2xl bg-wk-orange px-5 py-4 text-white shadow-sm">
           {d.nextNlMatch ? (
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[11px] uppercase tracking-wide text-white/60">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
                   Volgende wedstrijd Nederland
                 </p>
-                <p className="truncate text-sm font-medium">
+                <p className="truncate text-lg font-bold leading-tight">
                   {teamName(d.nextNlMatch.home)} – {teamName(d.nextNlMatch.away)}
                 </p>
-                <p className="text-[11px] text-white/60">{fmtDateTimeAms(d.nextNlMatch.kickoffUtc)}</p>
+                <p className="text-[11px] text-white/80">{fmtDateTimeAms(d.nextNlMatch.kickoffUtc)}</p>
               </div>
-              <div className="text-right text-lg">
+              <div className="shrink-0 text-right text-2xl font-extrabold">
                 <NextMatchCountdown kickoffUtcIso={d.nextNlMatch.kickoffUtc.toISOString()} />
               </div>
             </div>
           ) : (
-            <p className="text-sm text-white/80">Geen aankomende wedstrijd voor Nederland.</p>
+            <p className="text-sm font-medium text-white/90">Geen aankomende wedstrijd voor Nederland.</p>
           )}
         </div>
       </header>

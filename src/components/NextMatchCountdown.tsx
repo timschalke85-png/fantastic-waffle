@@ -15,10 +15,10 @@ export function NextMatchCountdown({ kickoffUtcIso }: { kickoffUtcIso: string })
     return () => clearInterval(id);
   }, []);
 
-  if (now === null) return <span className="tabular">—</span>;
+  if (now === null) return <span className="tabular font-extrabold">—</span>;
 
   const ms = target - now;
-  if (ms <= 0) return <span className="font-semibold text-brand-accent">nu bezig</span>;
+  if (ms <= 0) return <span className="font-extrabold text-white">nu bezig</span>;
 
   const s = Math.floor(ms / 1000);
   const d = Math.floor(s / 86400);
@@ -27,5 +27,5 @@ export function NextMatchCountdown({ kickoffUtcIso }: { kickoffUtcIso: string })
   const sec = s % 60;
   const parts = d > 0 ? [`${d}d`, `${h}u`, `${m}m`] : h > 0 ? [`${h}u`, `${m}m`, `${sec}s`] : [`${m}m`, `${sec}s`];
 
-  return <span className="tabular font-semibold">{parts.join(" ")}</span>;
+  return <span className="tabular font-extrabold">{parts.join(" ")}</span>;
 }
