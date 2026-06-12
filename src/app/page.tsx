@@ -193,32 +193,45 @@ function PouleFHero({ group }: { group: GroupView }) {
 
 function GroupCard({ group }: { group: GroupView }) {
   return (
-    <div className="rounded-lg border border-brand-ink/15 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-semibold">Poule {group.letter}</span>
+    <div className="overflow-hidden rounded-xl border border-brand-ink/10 bg-white shadow-sm">
+      <div className="flex items-center justify-between bg-wk-field/10 px-3 py-2">
+        <span className="flex h-6 items-center rounded-md bg-wk-field px-2 text-xs font-extrabold text-white">
+          Poule {group.letter}
+        </span>
       </div>
       <table className="w-full text-xs">
         <tbody>
-          {group.standings.map((r) => (
-            <tr key={r.team.id} className="border-t border-brand-ink/10 first:border-0">
-              <td className="py-1 pr-1 text-brand-ink/40">{r.rank}</td>
-              <td className="py-1 pr-1">{r.team.nameNl}</td>
-              <td className="py-1 px-1 text-center tabular text-brand-ink/60">{fmtSigned(r.goalDiff)}</td>
-              <td className="py-1 pl-1 text-right tabular font-semibold">{r.points}</td>
-            </tr>
-          ))}
+          {group.standings.map((r) => {
+            const top2 = r.rank <= 2;
+            return (
+              <tr key={r.team.id} className="border-t border-brand-ink/5 first:border-0">
+                <td className="py-1.5 pl-3 pr-1">
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
+                      top2 ? "bg-wk-field/15 text-wk-field" : "text-brand-ink/40"
+                    }`}
+                  >
+                    {r.rank}
+                  </span>
+                </td>
+                <td className="py-1.5 pr-1 font-medium">{r.team.nameNl}</td>
+                <td className="py-1.5 px-1 text-center tabular text-brand-ink/55">{fmtSigned(r.goalDiff)}</td>
+                <td className="py-1.5 pr-3 text-right text-sm font-extrabold tabular">{r.points}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {group.matches.some((m) => m.status !== "SCHEDULED") && (
-        <ul className="mt-2 space-y-0.5 border-t border-brand-ink/10 pt-2 text-[11px]">
+        <ul className="space-y-0.5 border-t border-brand-ink/10 px-3 py-2 text-[11px]">
           {group.matches
             .filter((m) => m.status !== "SCHEDULED")
             .map((m) => (
               <li key={m.id} className="flex justify-between">
-                <span className="truncate">
+                <span className="truncate text-brand-ink/55">
                   {m.home?.fifaCode}–{m.away?.fifaCode}
                 </span>
-                <span className="tabular">
+                <span className="tabular font-bold">
                   {m.homeScore ?? 0}–{m.awayScore ?? 0}
                   {m.status === "LIVE" && <LivePulse />}
                 </span>
@@ -237,32 +250,40 @@ function BesteNummers3({
   thirds: { groupLetter: string; row: StandingRow; rank: number; qualifies: boolean }[];
 }  & { fairPlayAvailable: boolean }) {
   return (
-    <section className="mt-6 rounded-lg border border-brand-ink/15 p-4">
-      <h2 className="text-sm font-semibold">Beste nummers 3</h2>
-      <p className="mb-2 text-[11px] text-brand-ink/50">
-        De acht beste nummers 3 gaan door naar de zestiende finales. Criteria: punten, doelsaldo,
-        doelpunten voor{fairPlayAvailable ? ", fair play" : ""}.
-        {!fairPlayAvailable && " Fair play-data is niet beschikbaar via de databron; bij gelijke stand beslist loting."}
-      </p>
-      <ol className="text-sm">
+    <section className="mt-6 overflow-hidden rounded-2xl border border-brand-ink/10 bg-white shadow-sm">
+      <div className="bg-wk-field px-4 py-3 text-white">
+        <h2 className="text-sm font-extrabold">Beste nummers 3</h2>
+        <p className="mt-0.5 text-[10px] leading-snug text-white/75">
+          De acht beste nummers 3 gaan door naar de zestiende finales. Criteria: punten, doelsaldo,
+          doelpunten voor{fairPlayAvailable ? ", fair play" : ""}.
+          {!fairPlayAvailable && " Fair play-data is niet beschikbaar via de databron; bij gelijke stand beslist loting."}
+        </p>
+      </div>
+      <ol className="p-2 text-sm">
         {thirds.map((t) => (
           <li
             key={t.groupLetter}
-            className={`flex items-center gap-2 border-t border-brand-ink/10 py-1.5 ${
-              t.qualifies ? "" : "text-brand-ink/40"
-            }`}
+            className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${t.qualifies ? "" : "opacity-50"}`}
           >
-            <span className="w-5 text-brand-ink/50">{t.rank}</span>
-            <span className="w-12 text-[11px] text-brand-ink/50">Poule {t.groupLetter}</span>
-            <span className="flex-1">
+            <span className="w-5 text-center font-extrabold tabular text-brand-ink/45">{t.rank}</span>
+            <span className="rounded bg-wk-field/10 px-1.5 py-0.5 text-[10px] font-bold text-wk-field">
+              {t.groupLetter}
+            </span>
+            <span className="flex-1 truncate font-bold">
               {t.row.team.nameNl}
               {t.row.decidedByLots && <LotsMark />}
             </span>
-            <span className="tabular text-brand-ink/60">
+            <span className="tabular text-xs text-brand-ink/55">
               {t.row.points} ptn · {fmtSigned(t.row.goalDiff)}
             </span>
-            <span className="w-16 text-right text-[11px]">
-              {t.qualifies ? <span className="text-green-700">geplaatst</span> : "uit"}
+            <span className="w-16 text-right">
+              {t.qualifies ? (
+                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800">
+                  geplaatst
+                </span>
+              ) : (
+                <span className="text-[11px] text-brand-ink/40">uit</span>
+              )}
             </span>
           </li>
         ))}
