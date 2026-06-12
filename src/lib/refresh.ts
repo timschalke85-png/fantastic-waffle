@@ -27,6 +27,7 @@ export interface RefreshResult {
   updated: number; // rows updated from the API
   skippedOverridden: number; // rows left untouched because manually_overridden
   lastFetchUtc: string | null;
+  recomputed?: boolean; // true if a FINISHED transition triggered a score recompute
   error?: string;
 }
 
@@ -76,12 +77,13 @@ export async function refreshMatchData(opts: { force?: boolean } = {}): Promise<
 
     // Current state, to skip overridden rows and only fill knockout teams once.
     const existing = await prisma.match.findMany({
-      select: { apiMatchId: true, manuallyOverridden: true, homeTeamId: true, awayTeamId: true },
+      select: { apiMatchId: true, manuallyOverridden: true, homeTeamId: true, awayTeamId: true, status: true },
     });
     const existingByApiId = new Map(existing.map((m) => [m.apiMatchId, m]));
 
     let updated = 0;
     let skippedOverridden = 0;
+    let newlyFinished = 0;
 
     for (const m of snap.matches) {
       const cur = existingByApiId.get(m.apiMatchId);
@@ -90,6 +92,7 @@ export async function refreshMatchData(opts: { force?: boolean } = {}): Promise<
         skippedOverridden++;
         continue;
       }
+      if (cur.status !== "FINISHED" && m.status === "FINISHED") newlyFinished++;
       const data: Record<string, unknown> = {
         status: m.status,
         homeScore: m.homeScore,
@@ -115,6 +118,20 @@ export async function refreshMatchData(opts: { force?: boolean } = {}): Promise<
     await setSetting("last_api_fetch_utc", fetchedAt);
     await setSetting("api_provider", snap.provider);
 
+    // Scoring trigger (Fase 7): a match transitioning to FINISHED must refresh the
+    // leaderboard. Dynamic import keeps `server-only` (recompute) out of this
+    // module's static graph so the pure refresh unit tests don't load it.
+    let recomputed = false;
+    if (newlyFinished > 0) {
+      try {
+        const { recomputeScores } = await import("./recompute");
+        await recomputeScores();
+        recomputed = true;
+      } catch {
+        // Scoring must never break the match refresh or the page render.
+      }
+    }
+
     return {
       refreshed: true,
       reason: opts.force ? "forced" : "stale",
@@ -123,6 +140,7 @@ export async function refreshMatchData(opts: { force?: boolean } = {}): Promise<
       updated,
       skippedOverridden,
       lastFetchUtc: fetchedAt,
+      recomputed,
     };
   } catch (e) {
     // Provider hiccup must not break the page; serve whatever the DB holds.

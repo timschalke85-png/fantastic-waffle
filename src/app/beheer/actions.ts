@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { signIn, signOut, isAdmin } from "@/lib/admin-auth";
 import { setSetting } from "@/lib/settings";
 import { refreshMatchData } from "@/lib/refresh";
+import { recomputeScores } from "@/lib/recompute";
 import type { MatchStatus } from "@prisma/client";
 
 export async function loginAction(formData: FormData): Promise<void> {
@@ -45,8 +46,16 @@ export async function updateMatchAction(formData: FormData): Promise<void> {
       manuallyOverridden: true,
     },
   });
+  // An admin result edit affects the leaderboard — recompute (Fase 7 trigger).
+  // Scoring must not break the admin flow, so failures are swallowed.
+  try {
+    await recomputeScores();
+  } catch {
+    /* leaderboard recompute is best-effort here */
+  }
   revalidatePath("/beheer");
   revalidatePath("/");
+  revalidatePath("/klassement");
 }
 
 /** Clear a manual override so the API drives this match again. */
@@ -96,6 +105,9 @@ export async function forceRefreshAction(): Promise<void> {
 
 export async function recomputeAction(): Promise<void> {
   await requireAdmin();
-  // No-op until Fase 7 (scoring engine). Present so the button is wired now.
-  redirect("/beheer?recompute=noop");
+  // Activated in Fase 7: rebuild the leaderboard from raw predictions + results.
+  const r = await recomputeScores();
+  revalidatePath("/beheer");
+  revalidatePath("/klassement");
+  redirect(`/beheer?recompute=${r.participants}`);
 }
