@@ -5,26 +5,44 @@ import { loadDashboard, type GroupView, type MatchView } from "@/lib/dashboard";
 import type { StandingRow } from "@/lib/standings";
 import { fmtDateTimeAms, fmtRelativeNl, fmtTimeAms } from "@/lib/format";
 import { NextMatchCountdown } from "@/components/NextMatchCountdown";
+import { BrandLogo } from "@/components/BrandLogo";
+import { LiveDot } from "@/components/LiveDot";
+import { BrandFooter } from "@/components/BrandFooter";
 
 export const dynamic = "force-dynamic";
 
 export default async function Overzicht() {
   const d = await loadDashboard();
+  const isLive = d.pouleF.matches.some((m) => m.status === "LIVE");
+  const pouleFCountries = d.pouleF.standings.map((r) => r.team.nameNl).join(" · ");
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
-      {/* Tournament header */}
+      {/* Branded header strip (chrome: olive). Logo degrades to a text wordmark. */}
       <header className="mb-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-brand-accent">Hotel van Saaze</p>
-            <h1 className="text-2xl font-bold leading-tight">WK 2026 Poule</h1>
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-brand-olive px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandLogo className="h-9 w-auto shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold leading-tight">Poule F</h1>
+              <p className="truncate text-[11px] text-white/70">{pouleFCountries}</p>
+            </div>
           </div>
+          <div className="shrink-0 text-right">
+            <LiveDot live={isLive} />
+            <p className="mt-1 text-[10px] text-white/55">Bijgewerkt: {fmtRelativeNl(d.lastFetchUtc)}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2">
           <span className="rounded-full border border-brand-ink/15 px-3 py-1 text-xs text-brand-ink/70">
             {d.phaseLabel}
           </span>
+          <span className="text-[10px] text-brand-ink/40">tijden in Europe/Amsterdam</span>
         </div>
-        <div className="mt-3 rounded-lg bg-brand-ink px-4 py-3 text-white">
+
+        {/* Next NL match countdown — kept, restyled with an oranje accent. */}
+        <div className="mt-2 rounded-lg border-l-4 border-wk-orange bg-brand-ink px-4 py-3 text-white">
           {d.nextNlMatch ? (
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -44,9 +62,6 @@ export default async function Overzicht() {
             <p className="text-sm text-white/80">Geen aankomende wedstrijd voor Nederland.</p>
           )}
         </div>
-        <p className="mt-2 text-[11px] text-brand-ink/50">
-          Laatst bijgewerkt: {fmtRelativeNl(d.lastFetchUtc)} · tijden in Europe/Amsterdam
-        </p>
       </header>
 
       {/* Poule F hero */}
@@ -70,6 +85,8 @@ export default async function Overzicht() {
       <p className="mt-8 text-center text-xs text-brand-ink/40">
         Een spel onder vrienden, geen kansspel.
       </p>
+
+      <BrandFooter />
     </main>
   );
 }
