@@ -63,6 +63,8 @@ The bracket picker auto-fills later rounds from the user's own picks, so a "matc
 
 Winner points require the predicted winner to actually win that real match; if the predicted winner isn't in the real tie, 0. Exact-score bonus only pays if the winner is also correct.
 
+**Orientation (clarified for the Fase 7 engine):** the exact-score bonus is judged on the result *between the two teams*, independent of home/away order. A predicted "X 2–1 Y" counts as exact when the real match ends X 2–1 Y, even if the bracket lists Y as the home side. Knockout home/away assignment is partly arbitrary, and a player predicts a result between two teams — not a home/away administration.
+
 Theoretical maximum depends on how many group matches fall after the lock; let the engine compute and display it, do not hard-code.
 
 ## Display
