@@ -3,7 +3,7 @@
 // "Beste nummers 3" widget. Live scores render from the DB (refreshed on load).
 import { loadDashboard, type GroupView, type MatchView } from "@/lib/dashboard";
 import type { StandingRow } from "@/lib/standings";
-import { fmtDateTimeAms, fmtRelativeNl, fmtTimeAms } from "@/lib/format";
+import { fmtDateTimeAms, fmtRelativeNl } from "@/lib/format";
 import { NextMatchCountdown } from "@/components/NextMatchCountdown";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LiveDot } from "@/components/LiveDot";
@@ -12,6 +12,7 @@ import { TeamCrest } from "@/components/TeamCrest";
 import { TodayBoard } from "@/components/TodayBoard";
 import { FavoritesBlock } from "@/components/FavoritesBlock";
 import { loadFavorites } from "@/lib/favorites-data";
+import { MatchCard } from "@/components/MatchCard";
 
 export const dynamic = "force-dynamic";
 
@@ -118,16 +119,6 @@ function LivePulse() {
   );
 }
 
-function ScoreOrTime({ m }: { m: MatchView }) {
-  if (m.status === "SCHEDULED") return <span className="text-brand-ink/60">{fmtTimeAms(m.kickoffUtc)}</span>;
-  return (
-    <span className="tabular font-semibold">
-      {m.homeScore ?? 0}–{m.awayScore ?? 0}
-      {m.status === "LIVE" && <LivePulse />}
-    </span>
-  );
-}
-
 function PouleFHero({ group }: { group: GroupView }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-brand-ink/10 bg-white shadow-sm">
@@ -184,19 +175,17 @@ function PouleFHero({ group }: { group: GroupView }) {
           })}
         </ol>
 
-        {/* The six Group F matches — restyled in Stap C. */}
-        <ul className="mt-4 divide-y divide-brand-ink/10 border-t border-brand-ink/10 pt-1">
-          {group.matches.map((m) => (
-            <li key={m.id} className="flex items-center gap-2 py-2 text-sm">
-              <span className="w-24 shrink-0 text-[11px] text-brand-ink/50">{fmtDateTimeAms(m.kickoffUtc)}</span>
-              <span className="flex-1 truncate text-right">{teamName(m.home)}</span>
-              <span className="w-16 shrink-0 text-center">
-                <ScoreOrTime m={m} />
-              </span>
-              <span className="flex-1 truncate">{teamName(m.away)}</span>
-            </li>
-          ))}
-        </ul>
+        {/* The six Group F matches — shared MatchCard: live glow, bold final, faded upcoming. */}
+        <div className="mt-4 border-t border-brand-ink/10 pt-3">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-ink/50">Wedstrijden</h3>
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {group.matches.map((m) => (
+              <li key={m.id}>
+                <MatchCard m={m} dateFormat="datetime" />
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </section>
   );
