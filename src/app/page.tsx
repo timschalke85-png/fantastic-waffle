@@ -9,6 +9,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { LiveDot } from "@/components/LiveDot";
 import { BrandFooter } from "@/components/BrandFooter";
 import { TeamCrest } from "@/components/TeamCrest";
+import { TodayBoard } from "@/components/TodayBoard";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,9 @@ export default async function Overzicht() {
           )}
         </div>
       </header>
+
+      {/* Vandaag — live scoreboard of all of today's matches, prominent on matchdays. */}
+      <TodayBoard matches={d.today} lastFetchUtc={d.lastFetchUtc} />
 
       {/* Poule F hero */}
       <PouleFHero group={d.pouleF} />

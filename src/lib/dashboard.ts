@@ -1,6 +1,7 @@
 // Server-side dashboard data: live matches from the DB + computed standings.
 import { prisma } from "./db";
 import { refreshMatchData } from "./refresh";
+import { isAmsToday, compareTodayMatches } from "./today";
 import {
   computeStandings,
   rankThirdPlaced,
@@ -40,6 +41,8 @@ export interface DashboardData {
   otherGroups: GroupView[]; // A–E, G–L, in order
   thirdPlace: ThirdPlaceRow[];
   nextNlMatch: MatchView | null;
+  /** All matches kicking off today (Europe/Amsterdam), any stage, scoreboard-sorted. */
+  today: MatchView[];
   phaseLabel: string;
   lastFetchUtc: string | null;
   fairPlayAvailable: boolean;
@@ -107,13 +110,14 @@ export async function loadDashboard(): Promise<DashboardData> {
   const [teams, matchesRaw] = await Promise.all([
     prisma.team.findMany({ select: { ...teamSelect, groupLetter: true } }),
     prisma.match.findMany({
-      where: { stage: "GROUP" },
+      // All stages: the group views filter by groupLetter, the "Vandaag" board needs knockout too.
       include: { homeTeam: { select: teamSelect }, awayTeam: { select: teamSelect } },
       orderBy: { kickoffUtc: "asc" },
     }),
   ]);
 
   const matches = matchesRaw.map(toView);
+  const today = matches.filter((m) => isAmsToday(m.kickoffUtc, new Date())).sort(compareTodayMatches);
   const teamsByGroup = new Map<string, StandingTeam[]>();
   for (const t of teams) {
     const list = teamsByGroup.get(t.groupLetter) ?? [];
@@ -164,6 +168,7 @@ export async function loadDashboard(): Promise<DashboardData> {
     otherGroups,
     thirdPlace,
     nextNlMatch,
+    today,
     phaseLabel,
     lastFetchUtc: refresh.lastFetchUtc,
     // football-data.org exposes no disciplinary data -> fair play unavailable.
