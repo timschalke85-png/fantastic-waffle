@@ -3,15 +3,25 @@
 @tailwind utilities;
 
 /*
- * Brand tokens. Neutral placeholders + the WK oranje accent, per CLAUDE.md:
- * never approximate the Van Saaze logo or guess brand colors. Once
- * /branding/brand.md lands, replace these values only.
+ * Brand tokens — official Hotel van Saaze colours (owner-approved). Strict zone
+ * separation: olive + copper are the hotel CHROME (header/footer/frame); orange +
+ * field-green are the WK ENERGY inside the poule content. Do not mix the zones.
  */
 :root {
-  --brand-primary: #0f172a; /* placeholder ink/navy */
-  --brand-accent: #ff7a00; /* WK oranje */
+  --brand-primary: #0f172a; /* ink/navy for body text */
   --brand-surface: #ffffff;
   --brand-ink: #0f172a;
+
+  /* Hotel van Saaze chrome (frame). */
+  --brand-olive: #515a3b;
+  --brand-copper: #bf8b52;
+
+  /* WK energy (inside poule content only). */
+  --wk-orange: #d85a30;
+  --wk-field: #0f6e56;
+
+  /* Accent token used by the non-dashboard pages = the WK oranje. */
+  --brand-accent: var(--wk-orange);
 }
 
 html {
@@ -27,6 +37,20 @@ body {
 /* Scoreboard-style numerals: tabular figures for scores/standings. */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Live-indicator pulse. Disabled automatically by the reduced-motion rule below. */
+@keyframes vs-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.live-pulse {
+  animation: vs-pulse 1.2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

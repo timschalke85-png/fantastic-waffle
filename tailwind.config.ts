@@ -11,11 +11,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Chrome (hotel frame): olive + copper.
         brand: {
           primary: "var(--brand-primary)",
           accent: "var(--brand-accent)",
           surface: "var(--brand-surface)",
           ink: "var(--brand-ink)",
+          olive: "var(--brand-olive)",
+          copper: "var(--brand-copper)",
+        },
+        // WK energy (poule content): orange + field-green.
+        wk: {
+          orange: "var(--wk-orange)",
+          field: "var(--wk-field)",
         },
       },
       fontVariantNumeric: {
