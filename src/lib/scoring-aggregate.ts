@@ -62,8 +62,12 @@ export interface ParticipantScore {
   pointsOtherGroups: number;
   pointsKnockout: number;
   pointsTotal: number;
-  /** PARKED: tiebreak metric — computed in the tiebreak step (SCORING.md pending). */
+  /** Tiebreak 1: # matches with the EXACT scoreline correct (Poule F + other
+   *  groups + knockout). Independent of toto-only hits — see SCORING.md. */
   exactCount: number;
+  /** Tiebreak 2: # of the 14 Poule F items (6 matches + 4 team-goals + 4 eindstand
+   *  positions) that SCORED points. A match counts on exact OR toto. */
+  groupFCorrectItems: number;
 }
 
 const isFinished = (m: MatchRow): boolean =>
@@ -180,6 +184,8 @@ export function scoreParticipant(p: ParticipantPredictions, ctx: ScoringContext)
   let groupF = 0;
   let other = 0;
   let knockout = 0;
+  let exactCount = 0; // tiebreak 1: exact scorelines (matches only)
+  let groupFCorrectItems = 0; // tiebreak 2: Poule F items that scored
 
   // Group-match predictions (only FINISHED + eligible score).
   for (const gm of p.groupMatch) {
@@ -189,13 +195,18 @@ export function scoreParticipant(p: ParticipantPredictions, ctx: ScoringContext)
     const pts = scoreGroupMatch({ home: gm.home, away: gm.away }, { home: actual.home, away: actual.away }, isF);
     if (isF) groupF += pts;
     else other += pts;
+    // Tiebreak metrics: exact = the literal scoreline; a Poule F item counts on any score (exact OR toto).
+    if (gm.home === actual.home && gm.away === actual.away) exactCount++;
+    if (isF && pts > 0) groupFCorrectItems++;
   }
 
-  // Poule F team goals (only once that team is complete).
+  // Poule F team goals (only once that team is complete). Not a scoreline → not in exactCount.
   for (const tg of p.teamGoals) {
     const actual = ctx.teamGoalsActual.get(tg.teamId);
     if (actual == null) continue;
-    groupF += scoreTeamGoals(tg.goals, actual);
+    const pts = scoreTeamGoals(tg.goals, actual);
+    groupF += pts;
+    if (pts > 0) groupFCorrectItems++;
   }
 
   // Group eindstand (per-group gating: only once that whole group is FINISHED).
@@ -212,6 +223,12 @@ export function scoreParticipant(p: ParticipantPredictions, ctx: ScoringContext)
     const pts = scoreGroupRank(predicted, g.actualByPosition, isF);
     if (isF) groupF += pts;
     else other += pts;
+    // Each correctly predicted Poule F position is one item (the +3 bonus is not an item).
+    if (isF) {
+      for (const pos of [1, 2, 3, 4]) {
+        if (predicted[pos] && predicted[pos] === g.actualByPosition[pos]) groupFCorrectItems++;
+      }
+    }
   }
 
   // Knockout (per FINISHED knockout match).
@@ -229,6 +246,17 @@ export function scoreParticipant(p: ParticipantPredictions, ctx: ScoringContext)
       actual,
       actual.stage,
     ).total;
+    // Exact knockout scoreline (orientation-independent, winner-independent): both
+    // actual teams predicted and their goals match. Requires the matchup to be right.
+    if (k.homeTeamId && k.awayTeamId && k.homeGoals != null && k.awayGoals != null) {
+      const byTeam = new Map<string, number>([
+        [k.homeTeamId, k.homeGoals],
+        [k.awayTeamId, k.awayGoals],
+      ]);
+      if (byTeam.get(actual.homeTeamId) === actual.homeScore && byTeam.get(actual.awayTeamId) === actual.awayScore) {
+        exactCount++;
+      }
+    }
   }
 
   return {
@@ -237,7 +265,8 @@ export function scoreParticipant(p: ParticipantPredictions, ctx: ScoringContext)
     pointsOtherGroups: other,
     pointsKnockout: knockout,
     pointsTotal: groupF + other + knockout,
-    exactCount: 0, // PARKED until tiebreak definitions are confirmed
+    exactCount,
+    groupFCorrectItems,
   };
 }
 

@@ -7,7 +7,25 @@ Approved by Tim, 11 June 2026. Implemented in `src/config/scoring.ts` as the sin
 - Scores are judged on the **official result**: the score at the end of play (after extra time if played). Penalty shoot-outs do not count toward the scoreline; the shoot-out winner counts as the match winner / advancing team.
 - A prediction earns the highest single applicable score bracket per item, not cumulative (e.g. exact score includes the correct outcome; you get 5, not 5+2).
 - All group predictions lock at the global deadline (2026-06-14 20:00 UTC). Knockout predictions lock at first R32 kickoff.
-- Ties on total points in the leaderboard: broken by (1) more exact scorelines predicted, (2) more correct Group F items, (3) earliest first submission.
+- Ties on total points in the leaderboard are broken, in order, by:
+  1. **More exact scorelines (`exactCount`).** The number of *matches* whose exact
+     scoreline was predicted correctly, counted across Poule F + the other groups +
+     the knockout (knockout counts). "Exact" means the predicted goals equal the
+     actual end-of-play goals; for knockout it is judged per-team
+     (orientation-independent) and does not require the winner to be correct. Only
+     scoreable matches count (group: FINISHED and eligible; knockout: FINISHED).
+     Team-goals are not scorelines and do not count here.
+  2. **More correct Group F items (`groupFCorrectItems`).** Of the **14** Poule F
+     items — the 6 Poule F matches + 4 team-goals + 4 eindstand positions (the +3
+     all-four bonus is not a separate item) — how many *scored points*. A match item
+     counts on an exact **or** a toto hit (any match that scored > 0); a team-goals
+     item and an eindstand-position item count when exactly correct. This is the
+     "scored points" definition on purpose, so tiebreak 2 measures something
+     different from tiebreak 1 (a toto-only Poule F match is a Group F item but not
+     an exact scoreline).
+  3. **Earliest first submission (`first_submitted_at`).** The timestamp of the
+     participant's first prediction save that wrote real content (set once). A
+     participant without such a timestamp (`NULL`) sorts last on this criterion.
 
 ## 1. Poule F
 
