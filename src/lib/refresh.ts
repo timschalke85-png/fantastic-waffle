@@ -97,6 +97,9 @@ export async function refreshMatchData(opts: { force?: boolean } = {}): Promise<
         status: m.status,
         homeScore: m.homeScore,
         awayScore: m.awayScore,
+        halfTimeHome: m.halfTimeHome,
+        halfTimeAway: m.halfTimeAway,
+        paused: m.paused,
         wentToExtraTime: m.wentToExtraTime,
         penaltyWinnerTeamId:
           m.penaltyWinnerApiTeamId != null

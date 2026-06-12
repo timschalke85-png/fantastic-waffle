@@ -33,6 +33,9 @@ export interface ProviderMatch {
   awayApiTeamId: number | null;
   homeScore: number | null; // full-time incl. extra time
   awayScore: number | null;
+  halfTimeHome: number | null; // rust-stand
+  halfTimeAway: number | null;
+  paused: boolean; // live half-time break (RUST)
   wentToExtraTime: boolean;
   penaltyWinnerApiTeamId: number | null; // set only when decided on penalties
 }

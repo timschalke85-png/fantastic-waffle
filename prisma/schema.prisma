@@ -89,6 +89,9 @@ model Match {
   status               MatchStatus @default(SCHEDULED)
   homeScore            Int?        @map("home_score") // full-time incl. extra time
   awayScore            Int?        @map("away_score")
+  halfTimeHome         Int?        @map("half_time_home") // rust-stand (RUST-indicator)
+  halfTimeAway         Int?        @map("half_time_away")
+  paused               Boolean     @default(false) @map("paused") // live half-time break = RUST
   wentToExtraTime      Boolean     @default(false) @map("went_to_extra_time")
   penaltyWinnerTeamId  String?     @map("penalty_winner_team_id")
   manuallyOverridden   Boolean     @default(false) @map("manually_overridden")

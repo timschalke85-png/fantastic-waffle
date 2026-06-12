@@ -24,6 +24,9 @@ export interface MatchView {
   status: "SCHEDULED" | "LIVE" | "FINISHED";
   homeScore: number | null;
   awayScore: number | null;
+  paused: boolean;
+  halfTimeHome: number | null;
+  halfTimeAway: number | null;
   home: TeamLite | null;
   away: TeamLite | null;
   groupLetter: string | null;
@@ -66,6 +69,9 @@ function toView(m: {
   status: string;
   homeScore: number | null;
   awayScore: number | null;
+  paused: boolean;
+  halfTimeHome: number | null;
+  halfTimeAway: number | null;
   groupLetter: string | null;
   bracketSlot: string | null;
   homeTeam: TeamLite | null;
@@ -77,6 +83,9 @@ function toView(m: {
     status: m.status as MatchView["status"],
     homeScore: m.homeScore,
     awayScore: m.awayScore,
+    paused: m.paused,
+    halfTimeHome: m.halfTimeHome,
+    halfTimeAway: m.halfTimeAway,
     home: m.homeTeam,
     away: m.awayTeam,
     groupLetter: m.groupLetter,

@@ -67,6 +67,7 @@ interface RawMatch {
     winner: "HOME_TEAM" | "AWAY_TEAM" | "DRAW" | null;
     duration: "REGULAR" | "EXTRA_TIME" | "PENALTY_SHOOTOUT";
     fullTime: { home: number | null; away: number | null };
+    halfTime: { home: number | null; away: number | null };
   };
 }
 
@@ -128,6 +129,9 @@ export class FootballDataOrgAdapter implements FootballDataAdapter {
         awayApiTeamId: m.awayTeam?.id ?? null,
         homeScore: m.score.fullTime.home,
         awayScore: m.score.fullTime.away,
+        halfTimeHome: m.score.halfTime?.home ?? null,
+        halfTimeAway: m.score.halfTime?.away ?? null,
+        paused: m.status === "PAUSED",
         wentToExtraTime,
         penaltyWinnerApiTeamId,
       };

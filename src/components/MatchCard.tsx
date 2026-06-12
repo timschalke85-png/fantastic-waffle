@@ -39,7 +39,7 @@ export function MatchCard({
         {live ? (
           <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-white">
             <span className="live-pulse inline-block h-2 w-2 rounded-full bg-white" aria-hidden />
-            LIVE
+            {m.paused ? "RUST" : "LIVE"}
           </span>
         ) : finished ? (
           <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-ink/40">afgelopen</span>
@@ -50,6 +50,12 @@ export function MatchCard({
 
       <TeamRow team={m.home} goals={showScore ? m.homeScore : null} live={live} />
       <TeamRow team={m.away} goals={showScore ? m.awayScore : null} live={live} />
+
+      {m.halfTimeHome != null && m.halfTimeAway != null && (
+        <p className={`mt-1 text-[10px] tabular ${live ? "text-white/70" : "text-brand-ink/45"}`}>
+          rust {m.halfTimeHome}–{m.halfTimeAway}
+        </p>
+      )}
     </div>
   );
 }
