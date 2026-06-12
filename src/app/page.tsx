@@ -8,6 +8,7 @@ import { NextMatchCountdown } from "@/components/NextMatchCountdown";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LiveDot } from "@/components/LiveDot";
 import { BrandFooter } from "@/components/BrandFooter";
+import { TeamCrest } from "@/components/TeamCrest";
 
 export const dynamic = "force-dynamic";
 
@@ -119,58 +120,74 @@ function ScoreOrTime({ m }: { m: MatchView }) {
 
 function PouleFHero({ group }: { group: GroupView }) {
   return (
-    <section className="rounded-xl border-2 border-brand-accent/60 bg-brand-accent/5 p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="rounded bg-brand-accent px-2 py-0.5 text-sm font-bold text-white">Poule F</span>
-        <span className="text-xs text-brand-ink/60">De groep van Oranje</span>
+    <section className="overflow-hidden rounded-2xl border border-brand-ink/10 bg-white shadow-sm">
+      {/* Veld-green hero band anchors the section in the WK energy. */}
+      <div className="flex items-center gap-2 bg-wk-field px-4 py-3 text-white">
+        <span className="rounded-md bg-white/20 px-2 py-0.5 text-sm font-extrabold">Poule F</span>
+        <span className="text-sm font-medium text-white/90">De groep van Oranje</span>
       </div>
 
-      {/* Standings: Punten, Doelsaldo, Doelpunten voor */}
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-[11px] uppercase tracking-wide text-brand-ink/50">
-            <th className="py-1 pr-2 font-medium">#</th>
-            <th className="py-1 pr-2 font-medium">Team</th>
-            <th className="py-1 px-1 text-center font-medium">G</th>
-            <th className="py-1 px-1 text-center font-medium" title="Doelsaldo">DS</th>
-            <th className="py-1 px-1 text-center font-medium" title="Doelpunten voor">DV</th>
-            <th className="py-1 pl-1 text-center font-medium">Ptn</th>
-          </tr>
-        </thead>
-        <tbody>
-          {group.standings.map((r) => (
-            <tr
-              key={r.team.id}
-              className={`border-t border-brand-ink/10 ${r.team.fifaCode === "NED" ? "font-semibold" : ""}`}
-            >
-              <td className="py-1.5 pr-2 text-brand-ink/50">{r.rank}</td>
-              <td className="py-1.5 pr-2">
-                {r.team.nameNl}
-                {r.team.fifaCode === "NED" && <span className="ml-1 text-brand-accent">●</span>}
-                {r.decidedByLots && <LotsMark />}
-              </td>
-              <td className="px-1 text-center tabular">{r.played}</td>
-              <td className="px-1 text-center tabular">{fmtSigned(r.goalDiff)}</td>
-              <td className="px-1 text-center tabular">{r.goalsFor}</td>
-              <td className="pl-1 text-center tabular font-semibold">{r.points}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="p-3">
+        {/* Column guide */}
+        <div className="mb-1.5 flex items-center gap-3 px-3 text-[10px] font-semibold uppercase tracking-wide text-brand-ink/40">
+          <span className="w-7 text-center">#</span>
+          <span className="w-8" />
+          <span className="flex-1">Team</span>
+          <span className="w-6 text-center" title="Gespeeld">G</span>
+          <span className="w-7 text-center" title="Doelsaldo">DS</span>
+          <span className="w-6 text-center" title="Doelpunten voor">DV</span>
+          <span className="w-9 text-right">Ptn</span>
+        </div>
 
-      {/* The six Group F matches */}
-      <ul className="mt-4 divide-y divide-brand-ink/10 border-t border-brand-ink/10">
-        {group.matches.map((m) => (
-          <li key={m.id} className="flex items-center gap-2 py-2 text-sm">
-            <span className="w-24 shrink-0 text-[11px] text-brand-ink/50">{fmtDateTimeAms(m.kickoffUtc)}</span>
-            <span className="flex-1 truncate text-right">{teamName(m.home)}</span>
-            <span className="w-16 shrink-0 text-center">
-              <ScoreOrTime m={m} />
-            </span>
-            <span className="flex-1 truncate">{teamName(m.away)}</span>
-          </li>
-        ))}
-      </ul>
+        {/* Standings as colourful row-cards; Nederland is a full oranje block. */}
+        <ol className="space-y-2">
+          {group.standings.map((r) => {
+            const ned = r.team.fifaCode === "NED";
+            const dim = ned ? "text-white/80" : "text-brand-ink/55";
+            return (
+              <li
+                key={r.team.id}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
+                  ned ? "bg-wk-orange text-white shadow-sm" : "border border-brand-ink/10 bg-white"
+                }`}
+              >
+                <span
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${
+                    ned ? "bg-white/25 text-white" : "bg-brand-ink/5 text-brand-ink/70"
+                  }`}
+                >
+                  {r.rank}
+                </span>
+                <TeamCrest src={r.team.crestUrl ?? null} code={r.team.fifaCode} />
+                <span className="flex-1 truncate font-bold">
+                  {r.team.nameNl}
+                  {r.decidedByLots && <LotsMark />}
+                </span>
+                <span className={`w-6 text-center text-xs tabular ${dim}`}>{r.played}</span>
+                <span className={`w-7 text-center text-xs tabular ${dim}`}>{fmtSigned(r.goalDiff)}</span>
+                <span className={`w-6 text-center text-xs tabular ${dim}`}>{r.goalsFor}</span>
+                <span className={`w-9 text-right text-2xl font-extrabold leading-none tabular ${ned ? "text-white" : "text-brand-ink"}`}>
+                  {r.points}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
+        {/* The six Group F matches — restyled in Stap C. */}
+        <ul className="mt-4 divide-y divide-brand-ink/10 border-t border-brand-ink/10 pt-1">
+          {group.matches.map((m) => (
+            <li key={m.id} className="flex items-center gap-2 py-2 text-sm">
+              <span className="w-24 shrink-0 text-[11px] text-brand-ink/50">{fmtDateTimeAms(m.kickoffUtc)}</span>
+              <span className="flex-1 truncate text-right">{teamName(m.home)}</span>
+              <span className="w-16 shrink-0 text-center">
+                <ScoreOrTime m={m} />
+              </span>
+              <span className="flex-1 truncate">{teamName(m.away)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }
