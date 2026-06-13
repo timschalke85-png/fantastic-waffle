@@ -7,7 +7,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { getGroupLockUtc } from "@/lib/settings";
+import { getGroupLockUtc, getKnockoutLockUtc, isKnockoutOpen } from "@/lib/settings";
 import {
   signInOrRegister,
   signOutParticipant,
@@ -17,6 +17,14 @@ import {
 } from "@/lib/participant-auth";
 import { eligibleGroupMatchIds } from "@/lib/predictions";
 import { parseScoreline, parseGoals, validateRanking } from "@/lib/predictions-validate";
+import {
+  resolveTie,
+  validateKnockoutPicks,
+  cascadeClear,
+  type Picks,
+  type R32Teams,
+} from "@/lib/knockout-bracket";
+import { r32TeamsFromMatches } from "@/lib/knockout";
 
 export type SaveResult = { ok: true } | { ok: false; error: string };
 
@@ -153,6 +161,136 @@ export async function saveRankAction(payload: {
     ),
   ]);
   if (filled.length > 0) await markFirstSubmission(guard.id); // set-once on real content
+  revalidatePath("/voorspellen");
+  return { ok: true };
+}
+
+// --- Knockout round (Fase 6) -------------------------------------------------
+
+export interface KnockoutPickInput {
+  bracketSlot: string; // FIFA match number "73".."104"
+  homeGoals: string; // "" = empty (partial saves allowed)
+  awayGoals: string;
+  winnerTeamId: string; // "" = no winner picked yet
+  // The client may send these, but the server IGNORES them: home/awayTeamId are a
+  // server-derived projection of the winner-picks (Q8). Re-deriving them here is
+  // the reason a winner-pick can never diverge from the stored teams.
+  homeTeamId?: string;
+  awayTeamId?: string;
+}
+
+const KO_SLOT_RE = /^(7[3-9]|8[0-8]|9[0-9]|10[0-4])$/; // 73..104
+
+/** Knockout guard: signed in, round open, and still before the knockout lock.
+ *  All three are enforced server-side, independent of the UI (Fase 5 discipline). */
+async function writableKnockoutParticipant(): Promise<{ id: string } | { error: string }> {
+  const p = await currentParticipant();
+  if (!p) return { error: "auth" };
+  if (!(await isKnockoutOpen())) return { error: "closed" };
+  const lock = await getKnockoutLockUtc();
+  if (lock && Date.now() >= lock.getTime()) return { error: "locked" };
+  return { id: p.id };
+}
+
+/**
+ * Save a participant's full knockout bracket (idempotent replace, like the group
+ * saves). The winner-picks are the source of truth; everything else is derived
+ * server-side so a bypassed or stale client cannot persist an inconsistent row:
+ *  - cascadeClear (policy B) drops any inconsistent OR half-formed downstream
+ *    winner before persisting — and the whole prediction (score included) for a
+ *    slot whose winner it clears.
+ *  - home/awayTeamId are re-derived via resolveTie; client-sent teams are ignored.
+ *  - the per-row invariant winnerTeamId ∈ {home, away} ∨ null is asserted.
+ */
+export async function saveKnockoutPickAction(items: KnockoutPickInput[]): Promise<SaveResult> {
+  const guard = await writableKnockoutParticipant();
+  if ("error" in guard) return { ok: false, error: guard.error };
+
+  for (const it of items) {
+    if (!KO_SLOT_RE.test(it.bracketSlot)) return { ok: false, error: "slot" };
+  }
+
+  // Real R32 ties — the only source for slots 73–88 (client teams are ignored).
+  const r32Matches = await prisma.match.findMany({
+    where: { stage: "R32" },
+    select: { bracketSlot: true, homeTeamId: true, awayTeamId: true },
+  });
+  const r32: R32Teams = r32TeamsFromMatches(r32Matches);
+
+  // Winner-picks = the source of truth. Cascade-clear (policy B) drops any
+  // inconsistent/half-formed downstream winner BEFORE persisting.
+  const rawPicks: Picks = {};
+  for (const it of items) {
+    if (it.winnerTeamId !== "") rawPicks[Number(it.bracketSlot)] = it.winnerTeamId;
+  }
+  const picks = cascadeClear(r32, rawPicks);
+
+  // Vangnet: an R32 winner must be a real team; nothing should be inconsistent
+  // after the cascade (it leaves R32 picks untouched, so this catches those).
+  if (!validateKnockoutPicks(r32, picks).ok) return { ok: false, error: "inconsistent" };
+
+  const toUpsert: {
+    bracketSlot: string;
+    homeTeamId: string | null;
+    awayTeamId: string | null;
+    homeGoals: number | null;
+    awayGoals: number | null;
+    winnerTeamId: string | null;
+  }[] = [];
+  const toClear: string[] = [];
+
+  for (const it of items) {
+    const slot = Number(it.bracketSlot);
+    const score = parseScoreline(it.homeGoals, it.awayGoals);
+    if (score.kind === "invalid") return { ok: false, error: "invalid" };
+
+    const winner = picks[slot] ?? null;
+    const cascadeDropped = rawPicks[slot] != null && winner == null;
+    const hasScore = score.kind === "value";
+
+    // Whole prediction goes when the cascade dropped its winner, or when the slot
+    // is otherwise empty (no winner and no complete scoreline; partial = empty).
+    if (cascadeDropped || (winner == null && !hasScore)) {
+      toClear.push(it.bracketSlot);
+      continue;
+    }
+
+    // Server-derived tie — client home/awayTeamId are intentionally ignored.
+    const tie = resolveTie(slot, r32, picks);
+    // Invariant: a stored winner is always one of the tie's two teams.
+    if (winner != null && winner !== tie.home && winner !== tie.away) {
+      return { ok: false, error: "inconsistent" };
+    }
+
+    toUpsert.push({
+      bracketSlot: it.bracketSlot,
+      homeTeamId: tie.home,
+      awayTeamId: tie.away,
+      homeGoals: hasScore ? score.home : null,
+      awayGoals: hasScore ? score.away : null,
+      winnerTeamId: winner,
+    });
+  }
+
+  await prisma.$transaction([
+    ...toClear.map((bracketSlot) =>
+      prisma.predictionKnockout.deleteMany({ where: { participantId: guard.id, bracketSlot } }),
+    ),
+    ...toUpsert.map((u) =>
+      prisma.predictionKnockout.upsert({
+        where: { participantId_bracketSlot: { participantId: guard.id, bracketSlot: u.bracketSlot } },
+        create: { participantId: guard.id, ...u },
+        update: {
+          homeTeamId: u.homeTeamId,
+          awayTeamId: u.awayTeamId,
+          homeGoals: u.homeGoals,
+          awayGoals: u.awayGoals,
+          winnerTeamId: u.winnerTeamId,
+        },
+      }),
+    ),
+  ]);
+  if (toUpsert.length > 0) await markFirstSubmission(guard.id); // set-once on real content
   revalidatePath("/voorspellen");
   return { ok: true };
 }
