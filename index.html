@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hardware — Checkmate Assistant</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a202c;
+    --bg-card: #2d3748;
+    --bg-card-hover: #323e52;
+    --border: #4a5568;
+    --border-subtle: rgba(74, 85, 104, 0.5);
+    --purple: #6b46c1;
+    --purple-text: #d6bcfa;
+    --green: #9ae6b4;
+    --amber: #f6ad55;
+    --red: #fc8181;
+    --text: rgba(255, 255, 255, 0.92);
+    --text-muted: rgba(255, 255, 255, 0.55);
+    --text-subtle: rgba(255, 255, 255, 0.35);
+    --radius-card: 12px;
+    --radius-large: 24px;
+    --nav-height: 60px;
+  }
+
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.6; }
+
+  /* NAV */
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; height: var(--nav-height); background: rgba(26,32,44,0.88); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; }
+  .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 2rem; width: 100%; display: flex; align-items: center; justify-content: space-between; }
+  .nav-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+  .nav-logo-text { font-size: 17px; font-weight: 700; color: var(--text); }
+  .nav-logo-badge { background: var(--purple); color: #fff; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 9999px; }
+  .nav-links { display: flex; gap: 2rem; list-style: none; }
+  .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 14px; transition: color .2s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta { background: transparent; color: var(--purple-text); border: 1px solid var(--purple-text); border-radius: 6px; padding: 7px 16px; font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: none; transition: all .2s; white-space: nowrap; }
+  .nav-cta:hover { background: rgba(214,188,250,.1); }
+
+  /* PAGE */
+  .page { max-width: 1200px; margin: 0 auto; padding: 0 2rem; padding-top: calc(var(--nav-height) + 4rem); padding-bottom: 5rem; }
+
+  /* HERO */
+  .hero-eyebrow { display: inline-flex; align-items: center; gap: 6px; background: rgba(107,70,193,.15); border: 1px solid rgba(107,70,193,.4); color: var(--purple-text); font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; padding: 5px 12px; border-radius: 9999px; margin-bottom: 1.25rem; }
+  .hero-title { font-size: 48px; font-weight: 700; line-height: 1.15; margin-bottom: 1rem; }
+  .hero-title span { color: var(--purple-text); }
+  .hero-sub { font-size: 18px; color: var(--text-muted); max-width: 580px; margin-bottom: 2rem; line-height: 1.7; }
+
+  .info-strip { display: flex; gap: 1.5rem; flex-wrap: wrap; padding: 1rem 1.5rem; background: rgba(154,230,180,.06); border: 1px solid rgba(154,230,180,.15); border-radius: var(--radius-card); margin-bottom: 2rem; }
+  .info-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); }
+  .info-icon { width: 14px; height: 14px; color: var(--green); flex-shrink: 0; }
+
+  .divider { height: 1px; background: var(--border-subtle); margin: 3rem 0; }
+
+  /* STEP */
+  .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; }
+  .step-number { width: 28px; height: 28px; border-radius: 50%; background: var(--purple); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step-label { font-size: 13px; color: var(--text-muted); }
+  .step-title { font-size: 20px; font-weight: 600; }
+
+  /* CARDS */
+  .cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 1rem; }
+
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1.5rem; cursor: pointer; transition: border-color .15s, background .15s; position: relative; display: flex; flex-direction: column; }
+  .card:hover { background: var(--bg-card-hover); border-color: rgba(107,70,193,.5); }
+  .card.selected { border-color: var(--purple); border-width: 1.5px; background: rgba(107,70,193,.06); }
+
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+  .card-badge { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 9999px; }
+  .badge-popular { background: rgba(128,90,213,.25); color: var(--purple-text); border: 1px solid rgba(128,90,213,.4); }
+  .badge-premium { background: rgba(246,173,85,.12); color: var(--amber); border: 1px solid rgba(246,173,85,.3); }
+  .badge-compact { background: rgba(154,230,180,.1); color: var(--green); border: 1px solid rgba(154,230,180,.25); }
+  .badge-wall { background: rgba(246,173,85,.1); color: var(--amber); border: 1px solid rgba(246,173,85,.25); }
+  .badge-desk { background: rgba(128,90,213,.15); color: var(--purple-text); border: 1px solid rgba(128,90,213,.3); }
+  .badge-floor { background: rgba(252,129,129,.1); color: var(--red); border: 1px solid rgba(252,129,129,.25); }
+
+  .check-circle { width: 22px; height: 22px; border-radius: 50%; background: var(--purple); display: none; align-items: center; justify-content: center; flex-shrink: 0; }
+  .check-circle svg { width: 12px; height: 12px; }
+  .card.selected .check-circle { display: flex; }
+
+  .card-brand { font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+  .card-name { font-size: 18px; font-weight: 700; margin-bottom: 1rem; }
+
+  .specs-list { list-style: none; margin-bottom: 1.25rem; flex: 1; }
+  .specs-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); padding: 4px 0; border-bottom: 1px solid var(--border-subtle); }
+  .specs-list li:last-child { border-bottom: none; }
+  .spec-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+
+  .card-price-block { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-subtle); }
+  .card-price { font-size: 22px; font-weight: 700; }
+  .card-price-note { font-size: 12px; color: var(--text-subtle); margin-top: 1px; }
+
+  .kiosk-link { font-size: 11px; color: var(--purple-text); text-decoration: none; opacity: .75; transition: opacity .15s; display: block; margin-top: 4px; }
+  .kiosk-link:hover { opacity: 1; }
+
+  /* KIOSK HOVER VISUAL OVERLAY */
+  .card.kiosk { overflow: hidden; }
+  .card-hover-visual {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 0;
+    background: #0f1319;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    overflow: hidden;
+    transition: height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+    opacity: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 2;
+    border-bottom: 1px solid transparent;
+  }
+  .card.kiosk:hover .card-hover-visual,
+  .card.kiosk.selected .card-hover-visual {
+    height: 180px;
+    opacity: 1;
+    border-bottom-color: var(--border-subtle);
+  }
+  .card-hover-visual svg { display: block; margin-bottom: 0; }
+
+  /* COMPARE TABLE */
+  details summary { cursor: pointer; font-size: 13px; color: var(--text-muted); list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 13px; color: var(--text-muted); margin-top: 1rem; }
+  .compare-table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-subtle); border-bottom: 1px solid var(--border); }
+  .compare-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+  .compare-table tr:last-child td { border-bottom: none; }
+  .compare-table td:first-child { color: var(--text); font-weight: 500; }
+  .compare-table tr:hover td { background: rgba(255,255,255,.02); }
+  .yes { color: var(--green); font-weight: 600; }
+
+  /* SUMMARY */
+  .summary-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-large); padding: 2rem 2.5rem; display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap; margin-top: 2.5rem; }
+  .summary-cols { display: flex; gap: 3rem; flex-wrap: wrap; }
+  .summary-col-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); margin-bottom: 4px; }
+  .summary-col-value { font-size: 16px; font-weight: 600; }
+  .summary-total { font-size: 28px; font-weight: 700; }
+  .empty { color: var(--text-subtle); font-weight: 400; font-size: 14px; }
+
+  .btn-primary { background: var(--purple); color: #fff; border: none; border-radius: 6px; padding: 12px 24px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background .2s; text-decoration: none; display: inline-block; }
+  .btn-primary:hover { background: #7c3aed; }
+  .btn-primary:disabled { opacity: .35; cursor: default; }
+  .btn-outline { background: transparent; color: var(--purple-text); border: 1px solid var(--purple-text); border-radius: 6px; padding: 12px 24px; font-size: 15px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all .2s; }
+  .btn-outline:hover { background: rgba(214,188,250,.08); }
+
+  .compat-note { margin-top: .75rem; padding: 10px 14px; background: rgba(107,70,193,.08); border: 1px solid rgba(107,70,193,.2); border-radius: 8px; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  .compat-note strong { color: var(--purple-text); }
+
+  @media (max-width: 768px) { .cards-grid { grid-template-columns: 1fr; } .hero-title { font-size: 32px; } .summary-section { flex-direction: column; align-items: flex-start; } .nav-links { display: none; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="https://checkmate-assistant.nl" class="nav-logo">
+      <span class="nav-logo-text">CHECKM<span style="color:var(--purple-text)">&#9650;</span>TE</span>
+      <span class="nav-logo-badge">ASSISTANT</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#">Product</a></li>
+      <li><a href="#">Features</a></li>
+      <li><a href="#">Voor wie</a></li>
+      <li><a href="#">Technologie</a></li>
+      <li><a href="#">Over ons</a></li>
+      <li><a href="#">Contact</a></li>
+    </ul>
+    <a href="#" class="nav-cta">Plan een demo</a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <div class="hero-eyebrow">
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10" rx="2"/></svg>
+    HARDWARE CONFIGURATOR
+  </div>
+  <h1 class="hero-title">Kies uw ideale<br><span>hardware setup</span></h1>
+  <p class="hero-sub">Stel uw zelf check-in kiosk samen: kies een Android tablet en een bijpassende VidaMount kiosk-behuizing voor uw locatie.</p>
+
+  <div class="info-strip">
+    <div class="info-item">
+      <svg class="info-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l2.5 2.5L11 4"/></svg>
+      Volledig gesloten kiosk-behuizing
+    </div>
+    <div class="info-item">
+      <svg class="info-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l2.5 2.5L11 4"/></svg>
+      Geen zichtbare schroeven aan voorkant
+    </div>
+    <div class="info-item">
+      <svg class="info-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l2.5 2.5L11 4"/></svg>
+      Kabel volledig verborgen
+    </div>
+    <div class="info-item">
+      <svg class="info-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v3l2 1.5"/></svg>
+      EU warehouse · 2&#8211;5 werkdagen
+    </div>
+    <div class="info-item">
+      <svg class="info-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l2.5 2.5L11 4"/></svg>
+      Compatibel met Checkmate software
+    </div>
+  </div>
+
+  <!-- STAP 1 -->
+  <div class="step-header">
+    <div class="step-number">1</div>
+    <div>
+      <div class="step-label">Stap 1 van 2</div>
+      <div class="step-title">Kies een Android tablet</div>
+    </div>
+  </div>
+
+  <div class="cards-grid">
+
+    <div class="card" id="tab1" onclick="selectTab('tab1','Samsung Galaxy Tab A9',199)">
+      <div class="card-top">
+        <span class="card-badge badge-compact">Compact</span>
+        <div class="check-circle"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5"><polyline points="2,6 5,9 10,3"/></svg></div>
+      </div>
+      <div class="card-brand">Samsung</div>
+      <div class="card-name">Galaxy Tab A9</div>
+      <ul class="specs-list">
+        <li><span class="spec-dot"></span>8,7" display &middot; 60Hz</li>
+        <li><span class="spec-dot"></span>MediaTek Helio G99</li>
+        <li><span class="spec-dot"></span>4 GB / 8 GB RAM</li>
+        <li><span class="spec-dot"></span>64 GB &middot; 128 GB opslag</li>
+        <li><span class="spec-dot"></span>Android 13 &middot; 5100 mAh</li>
+        <li><span class="spec-dot"></span>Dual speakers</li>
+      </ul>
+      <div class="card-price-block">
+        <div class="card-price">&euro; 199</div>
+        <div class="card-price-note">Incl. btw &middot; Vanaf prijs</div>
+      </div>
+    </div>
+
+    <div class="card" id="tab2" onclick="selectTab('tab2','Samsung Galaxy Tab A9+',269)">
+      <div class="card-top">
+        <span class="card-badge badge-popular">Meest gekozen</span>
+        <div class="check-circle"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5"><polyline points="2,6 5,9 10,3"/></svg></div>
+      </div>
+      <div class="card-brand">Samsung</div>
+      <div class="card-name">Galaxy Tab A9+</div>
+      <ul class="specs-list">
+        <li><span class="spec-dot"></span>11" display &middot; 90Hz</li>
+        <li><span class="spec-dot"></span>Snapdragon 695</li>
+        <li><span class="spec-dot"></span>4 GB / 8 GB RAM</li>
+        <li><span class="spec-dot"></span>64 GB &ndash; 256 GB opslag</li>
+        <li><span class="spec-dot"></span>Android 14 &middot; 7040 mAh</li>
+        <li><span class="spec-dot"></span>Quad speakers &middot; Dolby Atmos</li>
+      </ul>
+      <div class="card-price-block">
+        <div class="card-price">&euro; 269</div>
+        <div class="card-price-note">Incl. btw &middot; Vanaf prijs</div>
+      </div>
+    </div>
+
+    <div class="card" id="tab3" onclick="selectTab('tab3','Samsung Galaxy Tab S9 FE',449)">
+      <div class="card-top">
+        <span class="card-badge badge-premium">Premium</span>
+        <div class="check-circle"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5"><polyline points="2,6 5,9 10,3"/></svg></div>
+      </div>
+      <div class="card-brand">Samsung</div>
+      <div class="card-name">Galaxy Tab S9 FE</div>
+      <ul class="specs-list">
+        <li><span class="spec-dot"></span>10,9" display &middot; 90Hz</li>
+        <li><span class="spec-dot"></span>Samsung Exynos 1380</li>
+        <li><span class="spec-dot"></span>6 GB / 8 GB RAM</li>
+        <li><span class="spec-dot"></span>128 GB &middot; 256 GB opslag</li>
+        <li><span class="spec-dot"></span>Android 14 &middot; IP68 &middot; 8000 mAh</li>
+        <li><span class="spec-dot"></span>S Pen inbegrepen</li>
+      </ul>
+      <div class="card-price-block">
+        <div class="card-price">&euro; 449</div>
+        <div class="card-price-note">Incl. btw &middot; Vanaf prijs</div>
+      </div>
+    </div>
+
+  </div>
+
+  <details style="margin-bottom:.5rem">
+    <summary>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5l4 4 4-4"/></svg>
+      Volledige vergelijking bekijken
+    </summary>
+    <table class="compare-table">
+      <thead><tr><th>Specificatie</th><th>Tab A9</th><th>Tab A9+</th><th>Tab S9 FE</th></tr></thead>
+      <tbody>
+        <tr><td>Schermgrootte</td><td>8,7"</td><td>11"</td><td>10,9"</td></tr>
+        <tr><td>Refresh rate</td><td>60Hz</td><td>90Hz</td><td>90Hz</td></tr>
+        <tr><td>Processor</td><td>Helio G99</td><td>Snapdragon 695</td><td>Exynos 1380</td></tr>
+        <tr><td>Max. RAM</td><td>8 GB</td><td>8 GB</td><td>8 GB</td></tr>
+        <tr><td>Max. opslag</td><td>128 GB</td><td>256 GB</td><td>256 GB</td></tr>
+        <tr><td>IP-rating</td><td>&mdash;</td><td>&mdash;</td><td class="yes">IP68</td></tr>
+        <tr><td>S Pen</td><td>&mdash;</td><td>&mdash;</td><td class="yes">Inbegrepen</td></tr>
+        <tr><td>Batterij</td><td>5100 mAh</td><td>7040 mAh</td><td>8000 mAh</td></tr>
+        <tr><td>Prijs vanaf</td><td>&euro; 199</td><td>&euro; 269</td><td>&euro; 449</td></tr>
+      </tbody>
+    </table>
+  </details>
+
+  <div class="divider"></div>
+
+  <!-- STAP 2 -->
+  <div class="step-header">
+    <div class="step-number">2</div>
+    <div>
+      <div class="step-label">Stap 2 van 2</div>
+      <div class="step-title">Kies een VidaMount kiosk-behuizing</div>
+    </div>
+  </div>
+
+  <div class="compat-note" style="margin-bottom:1.5rem">
+    <strong>Compatibiliteit:</strong> Alle kiosk-behuizingen zijn tablet-specifiek. Getoonde prijzen zijn voor de <strong>Tab A9+</strong> variant. Na uw selectie ontvangt u een offerte met de juiste variant voor uw gekozen tablet.
+  </div>
+
+  <div class="cards-grid">
+
+    <!-- WALL -->
+    <div class="card kiosk" id="stand1" onclick="selectStand('stand1','VidaMount Wall Kiosk',156)">
+      <div class="card-hover-visual">
+        <svg width="150" height="172" viewBox="0 0 150 172" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="wg1" x1="14" y1="28" x2="136" y2="172" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="white" stop-opacity="0.18"/><stop offset="1" stop-color="black" stop-opacity="0.04"/></linearGradient></defs>
+          <rect x="0" y="0" width="150" height="12" rx="2" fill="#2a3244"/>
+          <rect x="50" y="12" width="9" height="18" rx="2" fill="#38465a"/>
+          <rect x="91" y="12" width="9" height="18" rx="2" fill="#38465a"/>
+          <rect x="14" y="30" width="122" height="142" rx="10" fill="#dde1e6"/>
+          <rect x="14" y="30" width="122" height="142" rx="10" fill="url(#wg1)" opacity="0.35"/>
+          <rect x="22" y="40" width="106" height="122" rx="6" fill="#1a202c"/>
+          <rect x="30" y="54" width="90" height="8" rx="3" fill="#6b46c1" opacity="0.55"/>
+          <rect x="36" y="68" width="78" height="4" rx="2" fill="white" opacity="0.14"/>
+          <rect x="36" y="76" width="60" height="4" rx="2" fill="white" opacity="0.09"/>
+          <rect x="30" y="90" width="90" height="12" rx="3" fill="white" opacity="0.06" stroke="white" stroke-opacity="0.12" stroke-width="0.5"/>
+          <rect x="30" y="107" width="90" height="12" rx="3" fill="white" opacity="0.06" stroke="white" stroke-opacity="0.12" stroke-width="0.5"/>
+          <rect x="30" y="128" width="90" height="17" rx="5" fill="#6b46c1" opacity="0.82"/>
+          <rect x="50" y="133" width="50" height="7" rx="2.5" fill="white" opacity="0.45"/>
+          <rect x="57" y="153" width="36" height="3" rx="1.5" fill="white" opacity="0.28"/>
+        </svg>
+      </div>
+      <div class="card-top">
+        <span class="card-badge badge-wall">Muurmodel</span>
+        <div class="check-circle"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5"><polyline points="2,6 5,9 10,3"/></svg></div>
+      </div>
+      <div class="card-brand">VidaBox &middot; vidabox.com/kiosks_eu</div>
+      <div class="card-name">VidaMount Fixed Wall Kiosk</div>
+      <ul class="specs-list">
+        <li><span class="spec-dot"></span>Direct op EU gang-box (60mm)</li>
+        <li><span class="spec-dot"></span>Geen zichtbare schroeven aan voorkant</li>
+        <li><span class="spec-dot"></span>Kabel verborgen achter muur</li>
+        <li><span class="spec-dot"></span>Portret &eacute;n landschap instelbaar</li>
+        <li><span class="spec-dot"></span>Tamper-proof vergrendeling</li>
+        <li><span class="spec-dot"></span>Wit of lichtgrijs leverbaar</li>
+      </ul>
+      <div class="card-price-block">
+        <div class="card-price">v.a. &euro; 156</div>
+        <div class="card-price-note">Excl. btw &middot; A9+ variant</div>
+        <a href="https://www.vidabox.com/kiosks_eu/vidamount-secure-fixed-wall-samsung-galaxy-tab-a9-plus-10-9-tablet-enclosure-mount-white.html" target="_blank" class="kiosk-link" onclick="event.stopPropagation()">Bekijk product &#8599;</a>
+      </div>
+    </div>
+
+    <!-- DESK -->
+    <div class="card kiosk" id="stand2" onclick="selectStand('stand2','VidaMount Desk Kiosk',284)">
+      <div class="card-hover-visual">
+        <svg width="180" height="172" viewBox="0 0 180 172" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="dg1" x1="0" y1="0" x2="124" y2="90" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="white" stop-opacity="0.22"/><stop offset="1" stop-color="black" stop-opacity="0.04"/></linearGradient></defs>
+          <rect x="30" y="156" width="120" height="14" rx="5" fill="#2d3748"/>
+          <rect x="45" y="148" width="90" height="12" rx="4" fill="#38465a"/>
+          <rect x="82" y="94" width="16" height="58" rx="4" fill="#38465a"/>
+          <path d="M82 94 Q82 72 64 62" stroke="#38465a" stroke-width="15" fill="none" stroke-linecap="round"/>
+          <g transform="translate(8,6) rotate(-9,90,48)">
+            <rect x="0" y="12" width="124" height="82" rx="10" fill="#dde1e6"/>
+            <rect x="0" y="12" width="124" height="82" rx="10" fill="url(#dg1)" opacity="0.28"/>
+            <rect x="8" y="21" width="108" height="64" rx="6" fill="#1a202c"/>
+            <rect x="16" y="30" width="46" height="6" rx="3" fill="#6b46c1" opacity="0.55"/>
+            <rect x="16" y="41" width="34" height="3.5" rx="1.5" fill="white" opacity="0.12"/>
+            <rect x="16" y="50" width="46" height="10" rx="3" fill="white" opacity="0.06" stroke="white" stroke-opacity="0.12" stroke-width="0.5"/>
+            <rect x="16" y="64" width="46" height="10" rx="3" fill="#6b46c1" opacity="0.7"/>
+            <rect x="72" y="25" width="32" height="54" rx="5" fill="white" opacity="0.04" stroke="white" stroke-opacity="0.1" stroke-width="0.5"/>
+            <rect x="77" y="33" width="22" height="18" rx="4" fill="#6b46c1" opacity="0.38"/>
+            <rect x="77" y="56" width="22" height="4" rx="2" fill="white" opacity="0.12"/>
+            <rect x="48" y="78" width="28" height="2.5" rx="1.5" fill="white" opacity="0.28"/>
+          </g>
+        </svg>
+      </div>
+      <div class="card-top">
+        <span class="card-badge badge-desk">Tafelmodel</span>
+        <div class="check-circle"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5"><polyline points="2,6 5,9 10,3"/></svg></div>
+      </div>
+      <div class="card-brand">VidaBox &middot; vidabox.com/kiosks_eu</div>
+      <div class="card-name">VidaMount Portable Desk Kiosk</div>
+      <ul class="specs-list">
+        <li><span class="spec-dot"></span>Vrijstaand op elke balie of tafel</li>
+        <li><span class="spec-dot"></span>Vaste 45&#176; hoek, ergonomisch</li>
+        <li><span class="spec-dot"></span>Kensington security slot</li>
+        <li><span class="spec-dot"></span>Kabel verborgen in hohle steel</li>
+        <li><span class="spec-dot"></span>Antislip voet, geen boormontage</li>
+        <li><span class="spec-dot"></span>Wit of lichtgrijs leverbaar</li>
+      </ul>
+      <div class="card-price-block">
+        <div class="card-price">v.a. &euro; 284</div>
+        <div class="card-price-note">Excl. btw &middot; A9+ variant</div>
+        <a href="https://www.vidabox.com/kiosks_eu/vidamount-portable-fixed-desk-table-counter-top-secure-samsung-galaxy-tab-a9-plus-10-9-tablet-enclosure-stand-white.html" target="_blank" class="kiosk-link" onclick="event.stopPropagation()">Bekijk product &#8599;</a>
+      </div>
+    </div>
+
+    <!-- FLOOR -->
+    <div class="card kiosk" id="stand3" onclick="selectStand('stand3','VidaMount Floor Stand Kiosk',384)">
+      <div class="card-hover-visual">
+        <svg width="106" height="172" viewBox="0 0 106 172" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="fg1" x1="6" y1="4" x2="100" y2="88" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="white" stop-opacity="0.2"/><stop offset="1" stop-color="black" stop-opacity="0.04"/></linearGradient></defs>
+          <ellipse cx="53" cy="164" rx="42" ry="7" fill="#1e2535"/>
+          <rect x="14" y="156" width="78" height="12" rx="5" fill="#2d3748"/>
+          <rect x="46" y="88" width="14" height="72" rx="4" fill="#38465a"/>
+          <rect x="38" y="82" width="30" height="10" rx="3" fill="#2d3748"/>
+          <rect x="6" y="4" width="94" height="82" rx="10" fill="#dde1e6"/>
+          <rect x="6" y="4" width="94" height="82" rx="10" fill="url(#fg1)" opacity="0.28"/>
+          <rect x="13" y="12" width="80" height="66" rx="7" fill="#1a202c"/>
+          <rect x="13" y="12" width="80" height="13" rx="7" fill="#6b46c1" opacity="0.22"/>
+          <rect x="29" y="16" width="48" height="5" rx="2" fill="white" opacity="0.22"/>
+          <rect x="22" y="32" width="62" height="4" rx="2" fill="white" opacity="0.1"/>
+          <rect x="26" y="40" width="54" height="4" rx="2" fill="white" opacity="0.07"/>
+          <rect x="18" y="51" width="70" height="9" rx="3" fill="white" opacity="0.06" stroke="white" stroke-opacity="0.12" stroke-width="0.5"/>
+          <rect x="18" y="64" width="70" height="9" rx="3" fill="#6b46c1" opacity="0.7"/>
+          <rect x="35" y="75" width="36" height="3" rx="1.5" fill="white" opacity="0.3"/>
+          <circle cx="84" cy="18" r="2.5" fill="white" opacity="0.35"/>
+          <circle cx="77" cy="18" r="2.5" fill="#9ae6b4" opacity="0.55"/>
+        </svg>
+      </div>
+      <div class="card-top">
+        <span class="card-badge badge-floor">Vloer / staand</span>
+        <div class="check-circle"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.5"><polyline points="2,6 5,9 10,3"/></svg></div>
+      </div>
+      <div class="card-brand">VidaBox &middot; vidabox.com/kiosks_eu</div>
+      <div class="card-name">VidaMount Floor Stand Kiosk</div>
+      <ul class="specs-list">
+        <li><span class="spec-dot"></span>Stalen tubulaire constructie</li>
+        <li><span class="spec-dot"></span>360&#176; rotatie &middot; verstelbare hoogte</li>
+        <li><span class="spec-dot"></span>Kabel volledig intern verborgen</li>
+        <li><span class="spec-dot"></span>Kensington security slot</li>
+        <li><span class="spec-dot"></span>Vloerbevestiging mogelijk (optioneel)</li>
+        <li><span class="spec-dot"></span>Wit of zwart leverbaar</li>
+      </ul>
+      <div class="card-price-block">
+        <div class="card-price">v.a. &euro; 384</div>
+        <div class="card-price-note">Excl. btw &middot; A9+ variant</div>
+        <a href="https://www.vidabox.com/kiosks_eu/vidamount-fixed-vesa-floor-stand-display-2-samsung-galaxy-tab-a9-plus-10-9-tablet-enclosure-white.html" target="_blank" class="kiosk-link" onclick="event.stopPropagation()">Bekijk product &#8599;</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="summary-section">
+    <div class="summary-cols">
+      <div>
+        <div class="summary-col-label">Tablet</div>
+        <div class="summary-col-value" id="sum-tablet"><span class="empty">Nog niet gekozen</span></div>
+      </div>
+      <div>
+        <div class="summary-col-label">Kiosk-behuizing</div>
+        <div class="summary-col-value" id="sum-stand"><span class="empty">Nog niet gekozen</span></div>
+      </div>
+      <div>
+        <div class="summary-col-label">Indicatieve prijs</div>
+        <div class="summary-col-value summary-total" id="sum-total"><span class="empty">&mdash;</span></div>
+      </div>
+    </div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <button class="btn-outline" onclick="resetAll()">Opnieuw</button>
+      <button class="btn-primary" id="btn-quote" disabled onclick="requestQuote()">Offerte aanvragen &rarr;</button>
+    </div>
+  </div>
+
+  <p style="font-size:11px; color:var(--text-subtle); margin-top:1rem; text-align:center">
+    Prijzen zijn indicatief op basis van de Tab A9+ configuratie. Exacte prijs afhankelijk van gekozen tablet en kleur. Alle prijzen excl. btw tenzij anders vermeld.
+  </p>
+
+</div>
+
+<script>
+var sel = { tab: null, tabName: '', tabPrice: 0, stand: null, standName: '', standPrice: 0 };
+
+function selectTab(id, name, price) {
+  ['tab1','tab2','tab3'].forEach(function(i){ document.getElementById(i).classList.remove('selected'); });
+  document.getElementById(id).classList.add('selected');
+  sel.tab = id; sel.tabName = name; sel.tabPrice = price;
+  updateSummary();
+}
+function selectStand(id, name, price) {
+  ['stand1','stand2','stand3'].forEach(function(i){ document.getElementById(i).classList.remove('selected'); });
+  document.getElementById(id).classList.add('selected');
+  sel.stand = id; sel.standName = name; sel.standPrice = price;
+  updateSummary();
+}
+function updateSummary() {
+  document.getElementById('sum-tablet').innerHTML = sel.tab
+    ? sel.tabName
+    : '<span class="empty">Nog niet gekozen</span>';
+  document.getElementById('sum-stand').innerHTML = sel.stand
+    ? sel.standName
+    : '<span class="empty">Nog niet gekozen</span>';
+  if (sel.tab && sel.stand) {
+    var total = sel.tabPrice + Math.round(sel.standPrice * 1.21);
+    document.getElementById('sum-total').textContent = '\u00b1 \u20ac ' + total;
+    document.getElementById('btn-quote').disabled = false;
+  } else {
+    document.getElementById('sum-total').innerHTML = '<span class="empty">&mdash;</span>';
+    document.getElementById('btn-quote').disabled = true;
+  }
+}
+function resetAll() {
+  ['tab1','tab2','tab3','stand1','stand2','stand3'].forEach(function(id){ document.getElementById(id).classList.remove('selected'); });
+  sel = { tab:null, tabName:'', tabPrice:0, stand:null, standName:'', standPrice:0 };
+  updateSummary();
+}
+function requestQuote() {
+  var total = sel.tabPrice + Math.round(sel.standPrice * 1.21);
+  alert('Bedankt voor uw interesse!\n\nSelectie:\n- ' + sel.tabName + ' (\u20ac ' + sel.tabPrice + ' incl. btw)\n- ' + sel.standName + ' (v.a. \u20ac ' + Math.round(sel.standPrice * 1.21) + ' incl. btw)\n\nIndicatief totaal: \u00b1 \u20ac ' + total + '\n\nOns team neemt contact met u op voor een exacte offerte op maat.');
+}
+</script>
+</body>
+</html>
