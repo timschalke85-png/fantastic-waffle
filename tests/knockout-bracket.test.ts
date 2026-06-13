@@ -4,6 +4,8 @@ import {
   resolveTie,
   validateKnockoutPicks,
   downstreamOf,
+  cascadeClear,
+  wouldClear,
   type R32Teams,
   type Picks,
 } from "../src/lib/knockout-bracket";
@@ -84,5 +86,71 @@ describe("downstreamOf", () => {
 
   it("a semi-final feeds both the final and the third-place play-off", () => {
     expect(downstreamOf(101)).toEqual([103, 104]);
+  });
+});
+
+describe("cascadeClear / wouldClear (policy B)", () => {
+  const r32: R32Teams = {
+    73: { home: "a", away: "b" },
+    75: { home: "c", away: "d" },
+  };
+
+  it("is a no-op on a fully consistent bracket", () => {
+    const picks: Picks = { 73: "a", 75: "c", 90: "a" }; // 90 = a v c, winner a ✓
+    expect(cascadeClear(r32, picks)).toEqual(picks);
+    expect(wouldClear(r32, picks)).toEqual([]);
+  });
+
+  it("does not mutate the input picks", () => {
+    const picks: Picks = { 73: "a", 75: "c", 90: "a" };
+    const snapshot = { ...picks };
+    cascadeClear(r32, picks);
+    expect(picks).toEqual(snapshot);
+  });
+
+  it("clears a downstream pick when an upstream winner change makes its tie inconsistent", () => {
+    // 90 = W73 v W75. With 73:b the tie becomes b v c, so the old winner a is gone.
+    const picks: Picks = { 73: "b", 75: "c", 90: "a" };
+    expect(wouldClear(r32, picks)).toEqual([90]);
+    expect(cascadeClear(r32, picks)).toEqual({ 73: "b", 75: "c" });
+  });
+
+  it("clears a half-formed tie even when the winner sits on the known side", () => {
+    // 73 unpredicted -> 90's home is null. Winner c is the known (away) side, but
+    // you cannot win against an unknown opponent, so the pick is dropped.
+    const picks: Picks = { 75: "c", 90: "c" };
+    expect(wouldClear(r32, picks)).toEqual([90]);
+    expect(cascadeClear(r32, picks)).toEqual({ 75: "c" });
+  });
+
+  it("keeps a pick whose winner still sits in its (unchanged) tie", () => {
+    // 90 = a v d (73:a, 75:d); a still in the tie -> kept.
+    const picks: Picks = { 73: "a", 75: "d", 90: "a" };
+    expect(wouldClear(r32, picks)).toEqual([]);
+    expect(cascadeClear(r32, picks)).toEqual(picks);
+  });
+
+  it("cascades down a chain: breaking an R16 feeder clears the R16 AND the QF below it", () => {
+    // Build 97 = W89 v W90 fully: 89 = W74 v W77, 90 = W73 v W75.
+    const deep: R32Teams = {
+      73: { home: "A", away: "B" },
+      74: { home: "C", away: "D" },
+      75: { home: "E", away: "F" },
+      77: { home: "G", away: "H" },
+    };
+    // Consistent: 89 = C v G (pick C), 90 = A v E (pick A), 97 = C v A (pick C).
+    // Break 74 -> D: 89 becomes D v G, so pick 89:C is impossible and 97's home
+    // (W89) goes null -> 97 half-formed. 90 (A still in A v E) survives.
+    const picks: Picks = { 73: "A", 74: "D", 75: "E", 77: "G", 89: "C", 90: "A", 97: "C" };
+    expect(wouldClear(deep, picks)).toEqual([89, 97]);
+    expect(cascadeClear(deep, picks)).toEqual({ 73: "A", 74: "D", 75: "E", 77: "G", 90: "A" });
+  });
+
+  it("clears a third-place pick while either semi-final winner is unknown (Q2)", () => {
+    // 103 = L101 v L102. With no SF winners picked, both feeders are null, so the
+    // troostfinale is locked: any pick there is dropped.
+    const picks: Picks = { 103: "x" };
+    expect(wouldClear({}, picks)).toEqual([103]);
+    expect(cascadeClear({}, picks)).toEqual({});
   });
 });

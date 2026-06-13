@@ -114,3 +114,57 @@ export function downstreamOf(slot: number): number[] {
   }
   return [...out].sort((a, b) => a - b);
 }
+
+// Non-R32 slots in round order (R16 → QF → SF → THIRD/FINAL). Each depends only
+// on earlier rounds, so a single top-down pass propagates every clear.
+const CASCADE_ORDER: number[] = Object.keys(KO_FEEDERS)
+  .map(Number)
+  .sort((a, b) => a - b);
+
+/**
+ * Cascade-clear under policy B (minimal): walk the bracket top-down and drop the
+ * winner pick of any downstream slot that is no longer tenable given the
+ * (already-cleaned) upstream picks. A pick is dropped when:
+ *  - its tie is fully known but the predicted winner is no longer one of the two
+ *    teams (the upstream changed under it), OR
+ *  - its tie is half-formed — one side is `null` because a direct upstream pick
+ *    is missing. You cannot predict a winner against an unknown opponent, so the
+ *    pick is dropped (Tim's call on the half-formed case). validateKnockoutPicks
+ *    deliberately does NOT flag this, so the cascade is the only place it's
+ *    cleaned — the save action must run this server-side, not just validate.
+ *
+ * A pick whose winner still sits in its (unchanged) tie is kept. R32 picks
+ * (73–88) are base nodes and untouched here; their consistency is the save
+ * action's job (R32 teams are read-only). Returns a NEW picks map; the input is
+ * not mutated.
+ */
+function cascadeRun(r32: R32Teams, picks: Picks): { next: Picks; cleared: number[] } {
+  const next: Picks = { ...picks };
+  const cleared: number[] = [];
+  for (const slot of CASCADE_ORDER) {
+    if (next[slot] == null) continue;
+    // Fresh resolution against the already-cleaned picks (no shared memo: `next`
+    // mutates as we clear, so a cached tie would be stale).
+    const tie = resolveTie(slot, r32, next);
+    const halfFormed = tie.home == null || tie.away == null;
+    const inconsistent = !halfFormed && next[slot] !== tie.home && next[slot] !== tie.away;
+    if (halfFormed || inconsistent) {
+      delete next[slot];
+      cleared.push(slot);
+    }
+  }
+  return { next, cleared };
+}
+
+/** Picks map after policy-B cascade-clear (see cascadeRun). Pure; input intact. */
+export function cascadeClear(r32: R32Teams, picks: Picks): Picks {
+  return cascadeRun(r32, picks).next;
+}
+
+/**
+ * The slots cascadeClear would drop, sorted — for the confirmation dialog
+ * ("these predictions will be removed") before a mutation is applied.
+ */
+export function wouldClear(r32: R32Teams, picks: Picks): number[] {
+  return cascadeRun(r32, picks).cleared.sort((a, b) => a - b);
+}
