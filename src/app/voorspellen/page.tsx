@@ -4,10 +4,11 @@
 // ./actions regardless of the UI.
 import { currentParticipant } from "@/lib/participant-auth";
 import { loadPredictionForm } from "@/lib/predictions";
+import { loadKnockoutData } from "@/lib/knockout-data";
 import { LoginForm } from "@/components/voorspellen/LoginForm";
 import { PredictionForm } from "@/components/voorspellen/PredictionForm";
+import { KnockoutBracket } from "@/components/voorspellen/KnockoutBracket";
 import { fmtDateTimeAms } from "@/lib/format";
-import { isKnockoutOpen, getKnockoutLockUtc } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -56,19 +57,18 @@ async function Loaded({
         </p>
       )}
       <PredictionForm data={data} participant={participant!} />
-      <KnockoutPanel />
+      <KnockoutPanel participantId={participantId} />
     </>
   );
 }
 
-// Fase 6 framework (test phase): the knockout prediction flow is gated behind
-// settings.knockout_open. Until the admin opens it (~28 June, once all group
-// matches are final and the R32 teams are known), this is just a status notice.
-// The bracket engine (src/lib/knockout-bracket.ts) is built and unit-tested; the
-// interactive picker UI is the remainder of Fase 6.
-async function KnockoutPanel() {
-  const open = await isKnockoutOpen();
-  if (!open) {
+// Knock-out voorspelronde (Fase 6). Gated behind settings.knockout_open. Once the
+// admin opens it (~28 June, all group matches final + R32 known), the interactive
+// picker is shown. Stap 5 adds the full locked read-only view; for now a locked
+// round shows a short notice. All writes are re-validated server-side in ./actions.
+async function KnockoutPanel({ participantId }: { participantId: string }) {
+  const data = await loadKnockoutData(participantId);
+  if (!data.open) {
     return (
       <section className="mt-6 rounded-lg border border-dashed border-brand-ink/20 p-4">
         <h2 className="text-sm font-semibold">Knock-out voorspelronde</h2>
@@ -80,14 +80,22 @@ async function KnockoutPanel() {
       </section>
     );
   }
-  const lock = await getKnockoutLockUtc();
   return (
     <section className="mt-6 rounded-lg border border-brand-accent/50 p-4">
-      <h2 className="text-sm font-semibold">Knock-out voorspelronde — geopend</h2>
-      <p className="mt-1 text-[12px] text-brand-ink/55">
-        {lock ? <>Bewerkbaar tot {fmtDateTimeAms(lock.toISOString())} (Europe/Amsterdam).</> : "Open."} De
-        interactieve bracket-picker wordt in Fase 6 afgerond.
-      </p>
+      <h2 className="mb-1 text-sm font-semibold">Knock-out voorspelronde — geopend</h2>
+      {data.lockIso && !data.locked && (
+        <p className="mb-3 text-[12px] text-brand-ink/55">
+          Bewerkbaar tot {fmtDateTimeAms(data.lockIso)} (Europe/Amsterdam).
+        </p>
+      )}
+      {data.locked ? (
+        <p className="mt-1 text-[12px] text-brand-ink/55">
+          De deadline is verstreken; je knock-out bracket is gesloten. Het volledige overzicht van je
+          opgeslagen bracket verschijnt hier binnenkort.
+        </p>
+      ) : (
+        <KnockoutBracket data={data} />
+      )}
     </section>
   );
 }
