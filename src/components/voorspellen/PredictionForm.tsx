@@ -17,11 +17,12 @@ import {
 // Exacte puntwaarden uit de centrale config (CLAUDE.md Hard rule 4 — nooit hardcoden).
 import { POULE_F, OTHER_GROUPS } from "@/config/scoring";
 
-/** Short, friendly one-liner explaining a section + its points. Saaze-green
- *  filled box so the explanation clearly stands out against the white poule card. */
+/** Short, friendly one-liner explaining a section + its points. Solid Saaze-green
+ *  block with white text so it springs out against the white poule card; the bold
+ *  point numbers stay high-contrast (white-bold on dark green). */
 function SectionHint({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-2 rounded-lg border border-wk-field/30 bg-wk-field/10 px-2.5 py-1.5 text-[11px] leading-snug text-brand-ink/80">
+    <p className="mb-2 rounded-lg bg-wk-field px-3 py-2 text-[11px] font-medium leading-snug text-white">
       {children}
     </p>
   );
