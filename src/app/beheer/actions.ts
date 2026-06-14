@@ -72,12 +72,17 @@ export async function clearOverrideAction(formData: FormData): Promise<void> {
 export async function updateSettingsAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const groupLock = String(formData.get("group_lock_utc") ?? "").trim();
+  const groupFloor = String(formData.get("group_eligibility_floor_utc") ?? "").trim();
   const knockoutLock = String(formData.get("knockout_lock_utc") ?? "").trim();
   const knockoutOpen = formData.get("knockout_open") === "on";
 
   if (groupLock) {
     const d = new Date(groupLock);
     if (!Number.isNaN(d.getTime())) await setSetting("group_lock_utc", d.toISOString());
+  }
+  if (groupFloor) {
+    const d = new Date(groupFloor);
+    if (!Number.isNaN(d.getTime())) await setSetting("group_eligibility_floor_utc", d.toISOString());
   }
   await setSetting("knockout_open", knockoutOpen ? "true" : "false");
   if (knockoutLock) {

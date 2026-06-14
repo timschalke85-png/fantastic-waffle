@@ -87,13 +87,29 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         <h2 className="mb-3 font-semibold">Instellingen</h2>
         <form action={updateSettingsAction} className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
-            Group lock (UTC, ISO)
+            Invoer-deadline / group lock (UTC, ISO)
             <input
               name="group_lock_utc"
               defaultValue={settings.group_lock_utc ?? ""}
+              placeholder="2026-06-20T17:00:00Z"
+              className="mt-1 w-full rounded border px-2 py-1.5 font-mono text-sm"
+            />
+            <span className="mt-1 block text-[11px] text-brand-ink/50">
+              Globale deadline waarop invoer sluit (per wedstrijd ook al op kickoff).
+            </span>
+          </label>
+          <label className="text-sm">
+            Eligibiliteit-vloer (UTC, ISO)
+            <input
+              name="group_eligibility_floor_utc"
+              defaultValue={settings.group_eligibility_floor_utc ?? ""}
               placeholder="2026-06-14T20:00:00Z"
               className="mt-1 w-full rounded border px-2 py-1.5 font-mono text-sm"
             />
+            <span className="mt-1 block text-[11px] text-brand-ink/50">
+              Wedstrijden vanaf deze tijd tellen mee voor punten. <strong>Verplicht</strong> — zonder deze
+              waarde faalt de scoring bewust luid.
+            </span>
           </label>
           <label className="text-sm">
             Knock-out lock (UTC, ISO)

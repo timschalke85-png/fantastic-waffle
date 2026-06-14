@@ -4,7 +4,9 @@
  *   (b) map team names to Dutch via NAME_NL (keyed by FIFA code)
  *   (c) seed r32_allocation (FIFA-sourced, cross-checked) + the 495 third-place
  *       combinations
- *   (d) seed settings, incl. group_lock_utc = 2026-06-14T20:00:00Z
+ *   (d) seed settings, incl. the two group-stage timestamps DERIVED from the
+ *       imported matches: group_eligibility_floor_utc (NL–Japan kickoff, scoring
+ *       floor) and group_lock_utc (NL–Zweden kickoff, input deadline)
  *
  * Idempotent: every write is an upsert keyed on the provider's stable ids, so
  * re-running converges rather than duplicating.
@@ -22,8 +24,6 @@ import {
 } from "./data/r32-allocation";
 
 const prisma = new PrismaClient();
-
-export const GROUP_LOCK_UTC = "2026-06-14T20:00:00Z";
 
 async function main() {
   const adapter = getAdapter();
@@ -125,9 +125,36 @@ async function main() {
   }
   console.log(`third_place_combinations rows: ${THIRD_PLACE_COMBINATIONS.length}`);
 
+  // --- group-stage lock timestamps, DERIVED from the data (no hard-coded times):
+  //   group_eligibility_floor_utc = NL–Japan kickoff (the pool's first eligible
+  //     match; fixed scoring scope), group_lock_utc = NL–Zweden kickoff (the
+  //     global input deadline; per-match locks roll up to it).
+  const teamIdByCode = async (fifaCode: string) =>
+    (await prisma.team.findFirst({ where: { fifaCode }, select: { id: true } }))?.id ?? null;
+  const [nedId, jpnId, sweId] = await Promise.all([
+    teamIdByCode("NED"),
+    teamIdByCode("JPN"),
+    teamIdByCode("SWE"),
+  ]);
+  const findGroupMatch = (a: string | null, b: string | null) =>
+    a && b
+      ? prisma.match.findFirst({
+          where: { stage: "GROUP", OR: [{ homeTeamId: a, awayTeamId: b }, { homeTeamId: b, awayTeamId: a }] },
+          select: { kickoffUtc: true },
+        })
+      : Promise.resolve(null);
+  const [nlJapan, nlZweden] = await Promise.all([
+    findGroupMatch(nedId, jpnId),
+    findGroupMatch(nedId, sweId),
+  ]);
+  if (!nlJapan || !nlZweden) {
+    throw new Error("Seed: kon NL–Japan en/of NL–Zweden niet vinden om de group-lock-tijden af te leiden.");
+  }
+
   // --- (d) settings ---
   const settings: Record<string, string> = {
-    group_lock_utc: GROUP_LOCK_UTC,
+    group_eligibility_floor_utc: nlJapan.kickoffUtc.toISOString(),
+    group_lock_utc: nlZweden.kickoffUtc.toISOString(),
     knockout_open: "false",
     api_provider: snap.provider,
     last_api_fetch_utc: snap.fetchedAtUtc,
