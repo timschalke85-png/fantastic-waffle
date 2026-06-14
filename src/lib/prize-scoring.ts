@@ -133,3 +133,76 @@ export function drawLuckyLoser(input: LuckyLoserInput): string | null {
   const n = Number.parseInt(digest.slice(0, 8), 16); // first 32 bits of the digest
   return pool[n % pool.length];
 }
+
+export interface EveningMatchInput {
+  eveningMatchId: string;
+  actual: DailyActual | null; // null -> not scoreable (not FINISHED / no half-time)
+  entries: DailyEntry[]; // checked-in predictors for this dagspel
+}
+
+export interface EveningMatchWinners {
+  eveningMatchId: string;
+  winnerIds: string[];
+  score: number;
+  scoreable: boolean;
+}
+
+export interface EveningWinners {
+  perMatch: EveningMatchWinners[];
+  luckyLoserId: string | null;
+}
+
+/**
+ * Compute an evening's winners: the dagwinnaar(s) per dagspel (shared pot on a
+ * tie) + the single Lucky Loser (drawn among checked-in MINUS all dagwinnaars).
+ * Pure — the caller loads the data and persists the result (freeze). A dagspel
+ * with actual=null (not finished / no half-time) yields no dagwinnaars.
+ */
+export function computeEveningWinners(input: {
+  eveningId: string;
+  matches: EveningMatchInput[];
+  checkedInIds: string[];
+  resultKey: string;
+}): EveningWinners {
+  const perMatch: EveningMatchWinners[] = input.matches.map((m) => {
+    if (!m.actual) return { eveningMatchId: m.eveningMatchId, winnerIds: [], score: 0, scoreable: false };
+    const { winnerIds, score } = determineDagwinnaars(m.entries, m.actual);
+    return { eveningMatchId: m.eveningMatchId, winnerIds, score, scoreable: true };
+  });
+  const dagwinnaarIds = perMatch.flatMap((p) => p.winnerIds);
+  const luckyLoserId = drawLuckyLoser({
+    eveningId: input.eveningId,
+    resultKey: input.resultKey,
+    checkedInIds: input.checkedInIds,
+    dagwinnaarIds,
+  });
+  return { perMatch, luckyLoserId };
+}
+
+export interface HoofdprijsWinner {
+  rank: number; // prize slot 1..slots
+  participantId: string;
+  nickname: string;
+}
+
+/**
+ * Assign the (up to) `slots` hoofdprijzen to the first participants in LEADERBOARD
+ * order who meet the attendance requirement (>= minEvenings). Doorschuiven: a
+ * higher-ranked participant who doesn't meet the requirement is skipped and the
+ * prize moves to the next eligible one. Pure.
+ */
+export function assignHoofdprijzen(
+  ranked: { participantId: string; nickname: string }[],
+  eveningsAttended: Record<string, number>,
+  minEvenings: number,
+  slots = 3,
+): HoofdprijsWinner[] {
+  const out: HoofdprijsWinner[] = [];
+  for (const r of ranked) {
+    if ((eveningsAttended[r.participantId] ?? 0) >= minEvenings) {
+      out.push({ rank: out.length + 1, participantId: r.participantId, nickname: r.nickname });
+      if (out.length >= slots) break;
+    }
+  }
+  return out;
+}

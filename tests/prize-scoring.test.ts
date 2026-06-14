@@ -3,6 +3,8 @@ import {
   scoreDailyPrediction,
   determineDagwinnaars,
   drawLuckyLoser,
+  computeEveningWinners,
+  assignHoofdprijzen,
   type DailyPrediction,
   type DailyActual,
 } from "../src/lib/prize-scoring";
@@ -111,5 +113,73 @@ describe("drawLuckyLoser (provably-fair, deterministic)", () => {
     const p1 = drawLuckyLoser(other);
     expect(["b", "c", "d", "e"]).toContain(p1);
     expect(drawLuckyLoser(other)).toBe(p1); // still deterministic
+  });
+});
+
+describe("computeEveningWinners", () => {
+  // Real: rust 1-0, eind 2-1.
+  const actual: DailyActual = { halfTimeHome: 1, halfTimeAway: 0, fullTimeHome: 2, fullTimeAway: 1 };
+  const perfect = pred(1, 0, 1, 1); // scores 9
+
+  it("computes dagwinnaars per match and a Lucky Loser excluding them", () => {
+    const res = computeEveningWinners({
+      eveningId: "ev1",
+      resultKey: "73=2-1",
+      checkedInIds: ["a", "b", "c", "d"],
+      matches: [
+        { eveningMatchId: "em1", actual, entries: [{ participantId: "a", pred: perfect }, { participantId: "b", pred: pred(0, 0, 0, 0) }] },
+      ],
+    });
+    expect(res.perMatch[0]).toMatchObject({ eveningMatchId: "em1", winnerIds: ["a"], scoreable: true });
+    expect(res.luckyLoserId).not.toBeNull();
+    expect(res.luckyLoserId).not.toBe("a"); // dagwinnaar excluded
+    expect(["b", "c", "d"]).toContain(res.luckyLoserId);
+  });
+
+  it("shares the pot on a tie", () => {
+    const res = computeEveningWinners({
+      eveningId: "ev1",
+      resultKey: "73=2-1",
+      checkedInIds: ["a", "b"],
+      matches: [{ eveningMatchId: "em1", actual, entries: [{ participantId: "a", pred: perfect }, { participantId: "b", pred: perfect }] }],
+    });
+    expect(res.perMatch[0].winnerIds).toEqual(["a", "b"]);
+  });
+
+  it("yields no dagwinnaars for a non-scoreable match (actual null)", () => {
+    const res = computeEveningWinners({
+      eveningId: "ev1",
+      resultKey: "73=na",
+      checkedInIds: ["a", "b"],
+      matches: [{ eveningMatchId: "em1", actual: null, entries: [{ participantId: "a", pred: perfect }] }],
+    });
+    expect(res.perMatch[0]).toMatchObject({ winnerIds: [], scoreable: false });
+  });
+});
+
+describe("assignHoofdprijzen (doorschuiven)", () => {
+  const ranked = [
+    { participantId: "p1", nickname: "Een" },
+    { participantId: "p2", nickname: "Twee" },
+    { participantId: "p3", nickname: "Drie" },
+    { participantId: "p4", nickname: "Vier" },
+    { participantId: "p5", nickname: "Vijf" },
+  ];
+
+  it("gives the three prizes to the top three when all meet the requirement", () => {
+    const out = assignHoofdprijzen(ranked, { p1: 5, p2: 4, p3: 3, p4: 3, p5: 3 }, 3);
+    expect(out.map((w) => w.nickname)).toEqual(["Een", "Twee", "Drie"]);
+    expect(out.map((w) => w.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("skips a top-ranked participant below the requirement (prize shifts down)", () => {
+    // p2 only attended 1 evening -> skipped; p4 takes the third prize.
+    const out = assignHoofdprijzen(ranked, { p1: 5, p2: 1, p3: 3, p4: 4, p5: 0 }, 3);
+    expect(out.map((w) => w.nickname)).toEqual(["Een", "Drie", "Vier"]);
+  });
+
+  it("returns fewer than three when not enough participants qualify", () => {
+    const out = assignHoofdprijzen(ranked, { p1: 5 }, 3);
+    expect(out.map((w) => w.nickname)).toEqual(["Een"]);
   });
 });
