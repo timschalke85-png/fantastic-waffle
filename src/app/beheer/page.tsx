@@ -10,6 +10,7 @@ import {
   clearOverrideAction,
   updateSettingsAction,
   setKnockoutLockFromR32Action,
+  deleteParticipantAction,
   forceRefreshAction,
   recomputeAction,
 } from "./actions";
@@ -39,6 +40,10 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
   const r32Known = r32Matches.filter((m) => m.homeTeamId && m.awayTeamId).length;
   const r32Complete = r32Known === 16;
 
+  // Two-step delete confirmation: ?confirmDelete=<id> shows a confirm block with
+  // the real bijnaam before the irreversible action.
+  const confirmTarget = sp.confirmDelete ? participants.find((p) => p.id === sp.confirmDelete) : undefined;
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
       <header className="mb-6 flex items-center justify-between">
@@ -60,6 +65,29 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         </Banner>
       )}
       {sp.saved === "settings" && <Banner>Instellingen opgeslagen.</Banner>}
+      {sp.deleted && <Banner>Deelnemer {sp.deleted} is verwijderd.</Banner>}
+      {sp.error === "participant" && <Banner>Deelnemer niet gevonden.</Banner>}
+
+      {confirmTarget && (
+        <div className="mb-4 rounded-lg border-2 border-red-300 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-800">Deelnemer verwijderen?</p>
+          <p className="mt-1 text-[13px] text-red-700">
+            Weet je zeker dat je <strong>{confirmTarget.nickname}</strong> wilt verwijderen? Dit verwijdert ook
+            al hun voorspellingen en kan niet ongedaan worden gemaakt.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <form action={deleteParticipantAction}>
+              <input type="hidden" name="participantId" value={confirmTarget.id} />
+              <button className="rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white">
+                Ja, verwijder {confirmTarget.nickname}
+              </button>
+            </form>
+            <a href="/beheer" className="rounded border px-3 py-2 text-sm">
+              Annuleren
+            </a>
+          </div>
+        </div>
+      )}
       {sp.saved === "ko_lock" && <Banner>Knock-out lock gezet op de vroegste R32-aftrap.</Banner>}
       {sp.error === "no_r32" && (
         <Banner>Nog geen R32-wedstrijden in de data — knock-out lock niet gezet.</Banner>
@@ -196,6 +224,7 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
                   <th className="py-2 pr-2">Eerste inzending</th>
                   <th className="py-2 pr-2 text-center">Voorspellingen</th>
                   <th className="py-2 pr-2 text-right">Punten</th>
+                  <th className="py-2 pl-2 text-right">Actie</th>
                 </tr>
               </thead>
               <tbody>
@@ -213,6 +242,11 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
                       {p.predictionCount > 0 ? p.predictionCount : <span className="text-brand-ink/40">geen</span>}
                     </td>
                     <td className="py-1.5 pr-2 text-right tabular font-semibold">{p.points ?? "—"}</td>
+                    <td className="py-1.5 pl-2 text-right">
+                      <a href={`/beheer?confirmDelete=${p.id}`} className="text-xs text-red-600 underline">
+                        Verwijderen
+                      </a>
+                    </td>
                   </tr>
                 ))}
               </tbody>

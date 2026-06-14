@@ -69,6 +69,28 @@ export async function clearOverrideAction(formData: FormData): Promise<void> {
   revalidatePath("/");
 }
 
+/**
+ * Delete a participant. A single delete suffices: every participant relation
+ * (the four prediction tables + the score row) has onDelete: Cascade in the
+ * schema, so the DB removes them atomically — no orphans, no FK errors. Gated on
+ * requireAdmin and reached only via the two-step confirm in the UI. No recompute
+ * needed: other participants' scores are independent; the leaderboard re-ranks on
+ * load.
+ */
+export async function deleteParticipantAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("participantId") ?? "");
+  if (!id) redirect("/beheer?error=participant");
+  const p = await prisma.participant.findUnique({ where: { id }, select: { nickname: true } });
+  if (!p) redirect("/beheer?error=participant");
+
+  await prisma.participant.delete({ where: { id } }); // cascade removes predictions + score
+  revalidatePath("/beheer");
+  revalidatePath("/klassement");
+  revalidatePath("/");
+  redirect(`/beheer?deleted=${encodeURIComponent(p.nickname)}`);
+}
+
 export async function updateSettingsAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const groupLock = String(formData.get("group_lock_utc") ?? "").trim();
