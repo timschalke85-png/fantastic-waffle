@@ -50,6 +50,14 @@ model Participant {
   knockoutPredictions   PredictionKnockout[]
   score                 Score?
 
+  // Prijzenpoule (losse module): aanwezigheid, dagvoorspellingen, poll-stemmen,
+  // bevroren dagwinnaar-rijen, en de avonden waarvan deze deelnemer Lucky Loser is.
+  checkins          Checkin[]
+  dailyPredictions  DailyPrediction[]
+  pollVotes         PollVote[]
+  dailyWins         DailyWinner[]
+  luckyLoserOf      Evening[] @relation("LuckyLoser")
+
   @@map("participants")
 }
 
@@ -102,6 +110,11 @@ model Match {
   penaltyWinner  Team? @relation("PenaltyWinner", fields: [penaltyWinnerTeamId], references: [id])
 
   groupMatchPredictions PredictionGroupMatch[]
+
+  // Prijzenpoule (read-only verwijzingen; raken de match-scoring niet).
+  eveningMatches EveningMatch[]
+  pollOptions    PollOption[]
+  pollVotes      PollVote[]
 
   @@index([stage])
   @@index([groupLetter])
@@ -227,4 +240,121 @@ model ThirdPlaceCombination {
   assignment  Json
 
   @@map("third_place_combinations")
+}
+
+// ============================================================================
+// Prijzenpoule (losse module — PRIJZENPOULE-PLAN.md). Raakt de bestaande
+// poule/knock-out-scoring NIET; haakt alleen lezend in op Participant + Match.
+// ============================================================================
+
+// Een kijkavond bij Van Saaze (door beheer aangemaakt). 1 of 2 uitgezonden
+// wedstrijden (= dagspellen). Precies één avond is `isActive` ("vanavond").
+model Evening {
+  id              String    @id @default(cuid())
+  label           String
+  checkInCode     String?   @map("check_in_code") // gedeelde dagcode
+  isActive        Boolean   @default(false) @map("is_active")
+  pollOpen        Boolean   @default(false) @map("poll_open")
+  luckyLoserId    String?   @map("lucky_loser_id") // bevroren Lucky Loser
+  winnersFrozenAt DateTime? @map("winners_frozen_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  matches     EveningMatch[]
+  checkins    Checkin[]
+  pollOptions PollOption[]
+  pollVotes   PollVote[]
+  luckyLoser  Participant?   @relation("LuckyLoser", fields: [luckyLoserId], references: [id], onDelete: SetNull)
+
+  @@map("evenings")
+}
+
+// Eén uitgezonden wedstrijd binnen een avond = één DAGSPEL (eigen dagwinnaar).
+model EveningMatch {
+  id        String @id @default(cuid())
+  eveningId String @map("evening_id")
+  matchId   String @map("match_id")
+  ordinal   Int // 1 of 2
+
+  evening     Evening           @relation(fields: [eveningId], references: [id], onDelete: Cascade)
+  match       Match             @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  predictions DailyPrediction[]
+  winners     DailyWinner[]
+
+  @@unique([eveningId, matchId])
+  @@index([eveningId])
+  @@map("evening_matches")
+}
+
+// Aanwezigheid: deze deelnemer checkte in voor deze avond.
+model Checkin {
+  id            String   @id @default(cuid())
+  eveningId     String   @map("evening_id")
+  participantId String   @map("participant_id")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  evening     Evening     @relation(fields: [eveningId], references: [id], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([eveningId, participantId])
+  @@map("checkins")
+}
+
+// Dagvoorspelling: doelpunten per team per helft, per (deelnemer, dagspel).
+model DailyPrediction {
+  id             String   @id @default(cuid())
+  eveningMatchId String   @map("evening_match_id")
+  participantId  String   @map("participant_id")
+  firstHalfHome  Int      @map("first_half_home")
+  firstHalfAway  Int      @map("first_half_away")
+  secondHalfHome Int      @map("second_half_home")
+  secondHalfAway Int      @map("second_half_away")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  eveningMatch EveningMatch @relation(fields: [eveningMatchId], references: [id], onDelete: Cascade)
+  participant  Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([eveningMatchId, participantId])
+  @@map("daily_predictions")
+}
+
+// BEVROREN dagwinnaar(s) per dagspel (gedeelde pot = meerdere rijen).
+model DailyWinner {
+  id             String @id @default(cuid())
+  eveningMatchId String @map("evening_match_id")
+  participantId  String @map("participant_id")
+
+  eveningMatch EveningMatch @relation(fields: [eveningMatchId], references: [id], onDelete: Cascade)
+  participant  Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([eveningMatchId, participantId])
+  @@map("daily_winners")
+}
+
+// Kandidaat-wedstrijd voor de avond-poll (knock-out, NL eruit).
+model PollOption {
+  id        String @id @default(cuid())
+  eveningId String @map("evening_id")
+  matchId   String @map("match_id")
+
+  evening Evening @relation(fields: [eveningId], references: [id], onDelete: Cascade)
+  match   Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([eveningId, matchId])
+  @@map("poll_options")
+}
+
+// Stem van een deelnemer in de avond-poll (op een PollOption-wedstrijd).
+model PollVote {
+  id            String @id @default(cuid())
+  eveningId     String @map("evening_id")
+  participantId String @map("participant_id")
+  matchId       String @map("match_id")
+
+  evening     Evening     @relation(fields: [eveningId], references: [id], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  match       Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([eveningId, participantId])
+  @@map("poll_votes")
 }
