@@ -174,9 +174,12 @@ export function KnockoutBracket({ data }: { data: KnockoutData }) {
   // Q6 gate: the whole picker is blocked until every R32 tie is known.
   if (!data.r32Complete) {
     return (
-      <div className="rounded-lg border border-dashed border-brand-ink/20 p-4 text-[12px] text-brand-ink/60">
-        De knock-out wordt klaargezet zodra alle tegenstanders van de zestiende finales bekend zijn. Kom straks
-        terug — je kunt dan je volledige bracket invullen.
+      <div className="rounded-xl bg-brand-ink/[0.03] p-5 text-center ring-1 ring-brand-ink/10">
+        <p className="text-sm font-semibold text-brand-ink/70">Bracket nog niet beschikbaar</p>
+        <p className="mt-1 text-[12px] text-brand-ink/55">
+          De knock-out wordt klaargezet zodra alle tegenstanders van de zestiende finales bekend zijn. Kom
+          straks terug — je kunt dan je volledige bracket invullen.
+        </p>
       </div>
     );
   }
@@ -259,10 +262,21 @@ function MatchCard({
   const winner = effWinner(cell, tie);
 
   return (
-    <li className="rounded-lg border border-brand-ink/15 bg-white p-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-brand-ink/45">
-        {stage} <span className="text-brand-ink/30">· wedstrijd {slot}</span>
-      </p>
+    <li
+      className={`rounded-xl p-3 shadow-sm ring-1 transition-colors ${
+        winner ? "bg-white ring-brand-accent/30" : known ? "bg-white ring-brand-ink/10" : "bg-brand-ink/[0.03] ring-brand-ink/5"
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-ink/45">
+          {stage} <span className="text-brand-ink/30">· wedstrijd {slot}</span>
+        </span>
+        {readonlyTeams && known && (
+          <span className="rounded-full bg-brand-ink/5 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-brand-ink/45">
+            vastgesteld
+          </span>
+        )}
+      </div>
 
       {!known ? (
         <p className="py-2 text-center text-[12px] text-brand-ink/45">
@@ -270,9 +284,11 @@ function MatchCard({
         </p>
       ) : (
         <>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2">
             <span className="flex flex-1 items-center justify-end gap-2 truncate text-right">
-              <span className="truncate">{home!.nameNl}</span>
+              <span className={`truncate text-sm ${winner === home!.id ? "font-extrabold text-brand-ink" : "font-bold text-brand-ink/80"}`}>
+                {home!.nameNl}
+              </span>
               <TeamCrest src={home!.crestUrl} code={home!.fifaCode} />
             </span>
             <input
@@ -281,29 +297,28 @@ function MatchCard({
               pattern="[0-9]*"
               value={cell.home}
               onChange={(e) => onCell({ home: numeric(e.target.value) })}
-              className="w-10 rounded border border-brand-ink/20 px-1 py-1 text-center tabular"
+              className="h-11 w-11 rounded-lg border border-transparent bg-brand-ink/5 text-center text-xl font-extrabold tabular text-brand-ink outline-none focus:border-brand-accent focus:bg-white"
             />
-            <span className="text-brand-ink/40">–</span>
+            <span className="text-brand-ink/30">–</span>
             <input
               aria-label={`${away!.nameNl} doelpunten`}
               inputMode="numeric"
               pattern="[0-9]*"
               value={cell.away}
               onChange={(e) => onCell({ away: numeric(e.target.value) })}
-              className="w-10 rounded border border-brand-ink/20 px-1 py-1 text-center tabular"
+              className="h-11 w-11 rounded-lg border border-transparent bg-brand-ink/5 text-center text-xl font-extrabold tabular text-brand-ink outline-none focus:border-brand-accent focus:bg-white"
             />
             <span className="flex flex-1 items-center gap-2 truncate">
               <TeamCrest src={away!.crestUrl} code={away!.fifaCode} />
-              <span className="truncate">{away!.nameNl}</span>
+              <span className={`truncate text-sm ${winner === away!.id ? "font-extrabold text-brand-ink" : "font-bold text-brand-ink/80"}`}>
+                {away!.nameNl}
+              </span>
             </span>
           </div>
-          {readonlyTeams && (
-            <p className="mt-1 text-center text-[10px] text-brand-ink/35">Tegenstanders vastgesteld</p>
-          )}
 
           {isDraw ? (
-            <div className="mt-2 rounded-md bg-brand-accent/5 p-2">
-              <p className="mb-1 text-center text-[11px] text-brand-ink/60">
+            <div className="mt-2 rounded-lg bg-wk-field/5 p-2">
+              <p className="mb-1.5 text-center text-[11px] font-medium text-brand-ink/60">
                 Gelijkspel — wie gaat door na verlenging/penalty&apos;s?
               </p>
               <div className="flex gap-2">
@@ -312,22 +327,25 @@ function MatchCard({
                     key={t.id}
                     onClick={() => onCell({ drawWinner: t.id })}
                     aria-pressed={cell.drawWinner === t.id}
-                    className={`flex-1 rounded border px-2 py-1.5 text-xs font-semibold ${
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-bold transition-colors ${
                       cell.drawWinner === t.id
                         ? "border-brand-accent bg-brand-accent text-white"
-                        : "border-brand-ink/20 bg-white text-brand-ink/70"
+                        : "border-brand-ink/15 bg-white text-brand-ink/70 hover:border-brand-accent/40"
                     }`}
                   >
-                    {t.nameNl}
+                    <TeamCrest src={t.crestUrl} code={t.fifaCode} />
+                    <span className="truncate">{t.nameNl}</span>
                   </button>
                 ))}
               </div>
             </div>
           ) : (
             winner && (
-              <p className="mt-1.5 text-center text-[11px] font-semibold text-brand-accent">
-                → {teams[winner]?.nameNl} gaat door
-              </p>
+              <div className="mt-2 flex justify-center">
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-accent/10 px-2.5 py-0.5 text-[11px] font-bold text-brand-accent">
+                  {teams[winner]?.nameNl} gaat door
+                </span>
+              </div>
             )
           )}
         </>
@@ -363,15 +381,15 @@ function CascadeDialog({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal="true">
-      <div className="w-full max-w-sm rounded-xl bg-white p-4 shadow-xl">
-        <h4 className="text-sm font-bold">Latere voorspellingen vervallen</h4>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-brand-ink/50 p-4 sm:items-center" role="dialog" aria-modal="true">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl ring-1 ring-brand-ink/10">
+        <h4 className="text-base font-extrabold text-brand-ink">Latere voorspellingen vervallen</h4>
         <p className="mt-1 text-[12px] text-brand-ink/60">
           Door deze wijziging kloppen de volgende voorspellingen niet meer en worden ze gewist:
         </p>
-        <ul className="my-3 max-h-48 space-y-1 overflow-y-auto text-[12px]">
+        <ul className="my-3 max-h-48 space-y-1.5 overflow-y-auto text-[12px]">
           {rows.map((r, i) => (
-            <li key={i} className="rounded bg-brand-ink/5 px-2 py-1">
+            <li key={i} className="rounded-md bg-brand-accent/5 px-2.5 py-1.5 font-medium text-brand-ink/80">
               {r}
             </li>
           ))}
@@ -379,13 +397,13 @@ function CascadeDialog({
         <div className="flex gap-2">
           <button
             onClick={onCancel}
-            className="flex-1 rounded-lg border border-brand-ink/20 px-3 py-2 text-sm font-semibold text-brand-ink/70"
+            className="flex-1 rounded-lg border border-brand-ink/20 px-3 py-2 text-sm font-semibold text-brand-ink/70 hover:bg-brand-ink/5"
           >
             Annuleren
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 rounded-lg bg-brand-accent px-3 py-2 text-sm font-semibold text-white"
+            className="flex-1 rounded-lg bg-brand-accent px-3 py-2 text-sm font-semibold text-white shadow-sm"
           >
             Doorgaan
           </button>
@@ -399,17 +417,17 @@ function CascadeDialog({
 
 function RoundTabs({ active, onSelect }: { active: string; onSelect: (k: string) => void }) {
   return (
-    <div className="mb-3 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Knock-out rondes">
+    <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Knock-out rondes">
       {ROUNDS.map((r) => (
         <button
           key={r.key}
           role="tab"
           aria-selected={r.key === active}
           onClick={() => onSelect(r.key)}
-          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+          className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold tracking-wide transition-colors ${
             r.key === active
-              ? "bg-brand-accent text-white"
-              : "bg-brand-ink/5 text-brand-ink/60 hover:bg-brand-ink/10"
+              ? "bg-brand-accent text-white shadow-sm"
+              : "bg-brand-accent/10 text-brand-ink/70 hover:bg-brand-accent/20"
           }`}
         >
           {r.short}
@@ -444,15 +462,15 @@ export function KnockoutBracketReadonly({ data }: { data: KnockoutData }) {
 
   return (
     <div>
-      <div className="mb-3 rounded-lg bg-brand-ink px-4 py-3 text-white">
-        <p className="text-sm font-semibold">Knock-out vergrendeld</p>
-        <p className="text-[12px] text-white/80">
-          De deadline is verstreken. Hieronder staat je opgeslagen bracket — wijzigen kan niet meer.
+      <div className="mb-3 rounded-lg bg-red-600 px-4 py-3 text-white">
+        <p className="text-sm font-semibold">Deadline verstreken</p>
+        <p className="text-[12px] text-white/85">
+          De knock-out voorspelronde is gesloten. Hieronder staat je opgeslagen bracket — wijzigen kan niet meer.
         </p>
       </div>
 
       {!hasPicks ? (
-        <p className="rounded-lg border border-dashed border-brand-ink/20 p-4 text-center text-[12px] text-brand-ink/55">
+        <p className="rounded-xl bg-brand-ink/[0.03] p-5 text-center text-[12px] text-brand-ink/55 ring-1 ring-brand-ink/10">
           Je hebt geen knock-out voorspellingen opgeslagen.
         </p>
       ) : (
@@ -489,7 +507,11 @@ function ReadonlyCard({
   const winner = cell ? effWinner(cell, tie) : null;
 
   return (
-    <li className="rounded-lg border border-brand-ink/15 bg-white p-3">
+    <li
+      className={`rounded-xl p-3 shadow-sm ring-1 ${
+        known ? "bg-white ring-brand-ink/10" : "bg-brand-ink/[0.03] ring-brand-ink/5"
+      }`}
+    >
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-brand-ink/45">
         {stage} <span className="text-brand-ink/30">· wedstrijd {slot}</span>
       </p>
@@ -498,23 +520,29 @@ function ReadonlyCard({
         <p className="py-1 text-center text-[12px] text-brand-ink/40">Niet voorspeld.</p>
       ) : (
         <>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2">
             <span className="flex flex-1 items-center justify-end gap-2 truncate text-right">
-              <span className={`truncate ${winner === home!.id ? "font-bold" : ""}`}>{home!.nameNl}</span>
+              <span className={`truncate text-sm ${winner === home!.id ? "font-extrabold text-brand-ink" : "font-bold text-brand-ink/70"}`}>
+                {home!.nameNl}
+              </span>
               <TeamCrest src={home!.crestUrl} code={home!.fifaCode} />
             </span>
-            <span className="w-14 text-center tabular font-semibold">
+            <span className="min-w-[3.25rem] rounded-lg bg-brand-ink/5 px-2 py-1 text-center text-lg font-extrabold tabular text-brand-ink">
               {filled ? `${cell!.home}–${cell!.away}` : "—"}
             </span>
             <span className="flex flex-1 items-center gap-2 truncate">
               <TeamCrest src={away!.crestUrl} code={away!.fifaCode} />
-              <span className={`truncate ${winner === away!.id ? "font-bold" : ""}`}>{away!.nameNl}</span>
+              <span className={`truncate text-sm ${winner === away!.id ? "font-extrabold text-brand-ink" : "font-bold text-brand-ink/70"}`}>
+                {away!.nameNl}
+              </span>
             </span>
           </div>
           {winner && (
-            <p className="mt-1.5 text-center text-[11px] font-semibold text-brand-accent">
-              → {teams[winner]?.nameNl} gaat door
-            </p>
+            <div className="mt-2 flex justify-center">
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand-accent/10 px-2.5 py-0.5 text-[11px] font-bold text-brand-accent">
+                {teams[winner]?.nameNl} gaat door
+              </span>
+            </div>
           )}
         </>
       )}
