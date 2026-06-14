@@ -23,18 +23,26 @@ export interface WinDagspel {
   status: string;
 }
 
+export interface DailyPredictionValues {
+  firstHalfHome: number;
+  firstHalfAway: number;
+  secondHalfHome: number;
+  secondHalfAway: number;
+}
+
 export interface WinData {
   evening: { id: string; label: string; pollOpen: boolean; hasCode: boolean } | null;
   checkedIn: boolean;
   dagspellen: WinDagspel[];
+  existing: Record<string, DailyPredictionValues>; // eveningMatchId -> saved prediction
 }
 
 /** Everything /win needs for the active evening + this participant. */
 export async function loadWinData(participantId: string): Promise<WinData> {
   const evening = await getActiveEvening();
-  if (!evening) return { evening: null, checkedIn: false, dagspellen: [] };
+  if (!evening) return { evening: null, checkedIn: false, dagspellen: [], existing: {} };
 
-  const [checkin, eveningMatches] = await Promise.all([
+  const [checkin, eveningMatches, preds] = await Promise.all([
     prisma.checkin.findUnique({
       where: { eveningId_participantId: { eveningId: evening.id, participantId } },
       select: { id: true },
@@ -44,7 +52,29 @@ export async function loadWinData(participantId: string): Promise<WinData> {
       orderBy: { ordinal: "asc" },
       include: { match: { include: { homeTeam: true, awayTeam: true } } },
     }),
+    prisma.dailyPrediction.findMany({
+      where: { participantId, eveningMatch: { eveningId: evening.id } },
+      select: {
+        eveningMatchId: true,
+        firstHalfHome: true,
+        firstHalfAway: true,
+        secondHalfHome: true,
+        secondHalfAway: true,
+      },
+    }),
   ]);
+
+  const existing: Record<string, DailyPredictionValues> = Object.fromEntries(
+    preds.map((p) => [
+      p.eveningMatchId,
+      {
+        firstHalfHome: p.firstHalfHome,
+        firstHalfAway: p.firstHalfAway,
+        secondHalfHome: p.secondHalfHome,
+        secondHalfAway: p.secondHalfAway,
+      },
+    ]),
+  );
 
   const dagspellen: WinDagspel[] = eveningMatches.map((em) => ({
     eveningMatchId: em.id,
@@ -64,6 +94,7 @@ export async function loadWinData(participantId: string): Promise<WinData> {
     evening: { id: evening.id, label: evening.label, pollOpen: evening.pollOpen, hasCode: !!evening.checkInCode },
     checkedIn: !!checkin,
     dagspellen,
+    existing,
   };
 }
 
