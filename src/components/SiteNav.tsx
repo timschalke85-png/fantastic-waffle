@@ -1,11 +1,12 @@
 // Slim public navigation. Only links to routes that exist (extended per fase).
 import Link from "next/link";
 
+// Scenario's staat achteraan: minst relevant (puur informatief, voor jezelf).
 const LINKS: { href: string; label: string }[] = [
   { href: "/", label: "Overzicht" },
-  { href: "/scenarios", label: "Scenario's" },
   { href: "/voorspellen", label: "Voorspellen" },
   { href: "/klassement", label: "Klassement" },
+  { href: "/scenarios", label: "Scenario's" },
 ];
 
 export function SiteNav() {
