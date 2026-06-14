@@ -198,7 +198,7 @@ export function KnockoutBracket({ data }: { data: KnockoutData }) {
       <RoundTabs active={activeRound} onSelect={setActiveRound} />
 
       <h3 className="mb-2 text-sm font-semibold">{round.title}</h3>
-      <ul className="space-y-2">
+      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {round.slots.map((slot) => (
           <MatchCard
             key={slot}
@@ -263,8 +263,8 @@ function MatchCard({
 
   return (
     <li
-      className={`rounded-xl p-3 shadow-sm ring-1 transition-colors ${
-        winner ? "bg-white ring-brand-accent/30" : known ? "bg-white ring-brand-ink/10" : "bg-brand-ink/[0.03] ring-brand-ink/5"
+      className={`rounded-xl border p-3 shadow-sm transition-colors ${
+        winner ? "border-brand-accent/50 bg-white" : known ? "border-brand-ink/20 bg-white" : "border-brand-ink/10 bg-brand-ink/[0.03]"
       }`}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -291,23 +291,25 @@ function MatchCard({
               </span>
               <TeamCrest src={home!.crestUrl} code={home!.fifaCode} />
             </span>
-            <input
-              aria-label={`${home!.nameNl} doelpunten`}
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={cell.home}
-              onChange={(e) => onCell({ home: numeric(e.target.value) })}
-              className="h-11 w-11 rounded-lg border border-transparent bg-brand-ink/5 text-center text-xl font-extrabold tabular text-brand-ink outline-none focus:border-brand-accent focus:bg-white"
-            />
-            <span className="text-brand-ink/30">–</span>
-            <input
-              aria-label={`${away!.nameNl} doelpunten`}
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={cell.away}
-              onChange={(e) => onCell({ away: numeric(e.target.value) })}
-              className="h-11 w-11 rounded-lg border border-transparent bg-brand-ink/5 text-center text-xl font-extrabold tabular text-brand-ink outline-none focus:border-brand-accent focus:bg-white"
-            />
+            <div className="flex shrink-0 items-center gap-1 rounded-lg border border-brand-ink/15 bg-white px-1.5 py-1 shadow-inner">
+              <input
+                aria-label={`${home!.nameNl} doelpunten`}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={cell.home}
+                onChange={(e) => onCell({ home: numeric(e.target.value) })}
+                className="h-10 w-10 rounded-md border border-transparent bg-brand-ink/5 text-center text-xl font-extrabold tabular text-brand-ink outline-none focus:border-brand-accent focus:bg-white"
+              />
+              <span className="text-brand-ink/30">–</span>
+              <input
+                aria-label={`${away!.nameNl} doelpunten`}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={cell.away}
+                onChange={(e) => onCell({ away: numeric(e.target.value) })}
+                className="h-10 w-10 rounded-md border border-transparent bg-brand-ink/5 text-center text-xl font-extrabold tabular text-brand-ink outline-none focus:border-brand-accent focus:bg-white"
+              />
+            </div>
             <span className="flex flex-1 items-center gap-2 truncate">
               <TeamCrest src={away!.crestUrl} code={away!.fifaCode} />
               <span className={`truncate text-sm ${winner === away!.id ? "font-extrabold text-brand-ink" : "font-bold text-brand-ink/80"}`}>
@@ -477,7 +479,7 @@ export function KnockoutBracketReadonly({ data }: { data: KnockoutData }) {
         <>
           <RoundTabs active={activeRound} onSelect={setActiveRound} />
           <h3 className="mb-2 text-sm font-semibold">{round.title}</h3>
-          <ul className="space-y-2">
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {round.slots.map((slot) => (
               <ReadonlyCard key={slot} slot={slot} tie={tieOf[slot]} cell={cells[slot]} teams={teams} />
             ))}
@@ -508,8 +510,8 @@ function ReadonlyCard({
 
   return (
     <li
-      className={`rounded-xl p-3 shadow-sm ring-1 ${
-        known ? "bg-white ring-brand-ink/10" : "bg-brand-ink/[0.03] ring-brand-ink/5"
+      className={`rounded-xl border p-3 shadow-sm ${
+        known ? "border-brand-ink/20 bg-white" : "border-brand-ink/10 bg-brand-ink/[0.03]"
       }`}
     >
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-brand-ink/45">
@@ -527,7 +529,7 @@ function ReadonlyCard({
               </span>
               <TeamCrest src={home!.crestUrl} code={home!.fifaCode} />
             </span>
-            <span className="min-w-[3.25rem] rounded-lg bg-brand-ink/5 px-2 py-1 text-center text-lg font-extrabold tabular text-brand-ink">
+            <span className="shrink-0 rounded-lg border border-brand-ink/15 bg-white px-3 py-1 text-center text-lg font-extrabold tabular text-brand-ink shadow-inner">
               {filled ? `${cell!.home}–${cell!.away}` : "—"}
             </span>
             <span className="flex flex-1 items-center gap-2 truncate">
