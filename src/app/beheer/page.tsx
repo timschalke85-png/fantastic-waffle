@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/admin-auth";
 import { getSettings } from "@/lib/settings";
 import { loadParticipantsAdmin } from "@/lib/participants-admin";
+import { loadEveningsAdmin, type AdminEveningRow } from "@/lib/prijzenpoule-data";
 import { fmtDateTimeAms, fmtRelativeNl } from "@/lib/format";
 import {
   loginAction,
@@ -13,6 +14,13 @@ import {
   deleteParticipantAction,
   forceRefreshAction,
   recomputeAction,
+  createEveningAction,
+  setEveningCodeAction,
+  activateEveningAction,
+  deactivateEveningAction,
+  setEveningMatchesAction,
+  togglePollAction,
+  updatePrizeTextsAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -23,14 +31,23 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   if (!(await isAdmin())) return <LoginView error={sp.error === "auth"} />;
 
-  const [settings, matches, participants] = await Promise.all([
+  const [settings, matches, participants, evenings] = await Promise.all([
     getSettings(),
     prisma.match.findMany({
       include: { homeTeam: true, awayTeam: true },
       orderBy: [{ kickoffUtc: "asc" }],
     }),
     loadParticipantsAdmin(),
+    loadEveningsAdmin(),
   ]);
+
+  // Readable options for assigning a broadcast match to an evening (real matches only).
+  const matchOptions = matches.map((m) => ({
+    id: m.id,
+    label: `${fmtDateTimeAms(m.kickoffUtc)} · ${
+      m.groupLetter ? `Poule ${m.groupLetter}` : m.bracketSlot ? `KO ${m.bracketSlot}` : "—"
+    } · ${m.homeTeam?.nameNl ?? "n.t.b."} – ${m.awayTeam?.nameNl ?? "n.t.b."}`,
+  }));
 
   // Knock-out readiness hints (informational only — no automatic action).
   const groupMatches = matches.filter((m) => m.stage === "GROUP");
@@ -65,6 +82,10 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         </Banner>
       )}
       {sp.saved === "settings" && <Banner>Instellingen opgeslagen.</Banner>}
+      {sp.saved === "evening" && <Banner>Avond bijgewerkt.</Banner>}
+      {sp.saved === "prizes" && <Banner>Prijs-teksten opgeslagen.</Banner>}
+      {sp.error === "evening_label" && <Banner>Geef de avond een label.</Banner>}
+      {sp.error === "evening_matches" && <Banner>Kies 1 of 2 wedstrijden voor de avond.</Banner>}
       {sp.deleted && <Banner>Deelnemer {sp.deleted} is verwijderd.</Banner>}
       {sp.error === "participant" && <Banner>Deelnemer niet gevonden.</Banner>}
 
@@ -208,6 +229,69 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         </div>
       </section>
 
+      {/* prijzenpoule */}
+      <section className="mb-8">
+        <h2 className="mb-3 font-semibold">Prijzenpoule</h2>
+
+        {/* Prijs-teksten */}
+        <div className="mb-6 rounded border p-4">
+          <h3 className="mb-1 text-sm font-semibold">Prijs-teksten</h3>
+          <p className="mb-3 text-[11px] text-brand-ink/55">
+            Deze teksten verschijnen op /win bij elk onderdeel. Leeg laten = &quot;Wordt nog bekendgemaakt&quot;.
+          </p>
+          <form action={updatePrizeTextsAction} className="grid gap-3 sm:grid-cols-2">
+            {[
+              ["prize_text_daywinner", "Dagwinnaar"],
+              ["prize_text_luckyloser", "Lucky Loser"],
+              ["prize_text_first", "Hoofdprijs nr. 1"],
+              ["prize_text_second", "Hoofdprijs nr. 2"],
+              ["prize_text_third", "Hoofdprijs nr. 3"],
+            ].map(([key, label]) => (
+              <label key={key} className="text-sm">
+                {label}
+                <input
+                  name={key}
+                  defaultValue={settings[key] ?? ""}
+                  placeholder="bijv. Van Saaze-voucher €50"
+                  className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
+                />
+              </label>
+            ))}
+            <div className="sm:col-span-2">
+              <button className="rounded bg-brand-ink px-3 py-2 text-sm font-medium text-white">
+                Prijs-teksten opslaan
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Nieuwe avond */}
+        <div className="mb-4 rounded border p-4">
+          <h3 className="mb-2 text-sm font-semibold">Nieuwe avond</h3>
+          <form action={createEveningAction} className="flex flex-wrap gap-2">
+            <input
+              name="label"
+              placeholder="bijv. Avond 1 — za 14 juni"
+              className="min-w-[16rem] flex-1 rounded border px-2 py-1.5 text-sm"
+            />
+            <button className="rounded bg-brand-accent px-3 py-2 text-sm font-medium text-white">
+              Avond aanmaken
+            </button>
+          </form>
+        </div>
+
+        {/* Avonden */}
+        {evenings.length === 0 ? (
+          <p className="text-sm text-brand-ink/55">Nog geen avonden aangemaakt.</p>
+        ) : (
+          <div className="space-y-3">
+            {evenings.map((e) => (
+              <EveningCard key={e.id} e={e} matchOptions={matchOptions} />
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* deelnemers */}
       <section className="mb-8">
         <h2 className="mb-3 font-semibold">Deelnemers ({participants.length})</h2>
@@ -330,6 +414,97 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         </div>
       </section>
     </main>
+  );
+}
+
+function MatchSelect({ defaultValue, options }: { defaultValue: string; options: { id: string; label: string }[] }) {
+  return (
+    <select name="matchId" defaultValue={defaultValue} className="max-w-[20rem] rounded border px-2 py-1 text-xs">
+      <option value="">— geen —</option>
+      {options.map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function EveningCard({ e, matchOptions }: { e: AdminEveningRow; matchOptions: { id: string; label: string }[] }) {
+  const slot1 = e.dagspellen[0]?.matchId ?? "";
+  const slot2 = e.dagspellen[1]?.matchId ?? "";
+  return (
+    <div className="rounded border p-4">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="font-semibold">{e.label}</span>
+        <span className="flex items-center gap-2 text-xs">
+          {e.isActive && (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 font-medium text-green-800">Actief — vanavond</span>
+          )}
+          {e.pollOpen && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">Poll open</span>
+          )}
+          <span className="text-brand-ink/55">{e.checkinCount} ingecheckt</span>
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4">
+        {/* Dagcode */}
+        <form action={setEveningCodeAction} className="flex items-end gap-1.5">
+          <input type="hidden" name="eveningId" value={e.id} />
+          <label className="text-xs">
+            Dagcode (krijgt men in het restaurant)
+            <input
+              name="checkInCode"
+              defaultValue={e.checkInCode ?? ""}
+              placeholder="bv. SAAZE7"
+              className="mt-1 block rounded border px-2 py-1 text-sm"
+            />
+          </label>
+          <button className="rounded border px-2.5 py-1.5 text-xs">Code opslaan</button>
+        </form>
+
+        {/* Activeren / deactiveren */}
+        {e.isActive ? (
+          <form action={deactivateEveningAction}>
+            <input type="hidden" name="eveningId" value={e.id} />
+            <button className="rounded border px-2.5 py-2 text-xs">Deactiveren</button>
+          </form>
+        ) : (
+          <form action={activateEveningAction}>
+            <input type="hidden" name="eveningId" value={e.id} />
+            <button className="rounded bg-brand-ink px-2.5 py-2 text-xs font-medium text-white">
+              Activeer als vanavond
+            </button>
+          </form>
+        )}
+
+        {/* Poll */}
+        <form action={togglePollAction}>
+          <input type="hidden" name="eveningId" value={e.id} />
+          <input type="hidden" name="open" value={(!e.pollOpen).toString()} />
+          <button className="rounded border px-2.5 py-2 text-xs">{e.pollOpen ? "Poll sluiten" : "Poll openen"}</button>
+        </form>
+      </div>
+
+      {/* Uitgezonden wedstrijd(en) = de dagspellen */}
+      <form action={setEveningMatchesAction} className="mt-3 border-t pt-3">
+        <input type="hidden" name="eveningId" value={e.id} />
+        <p className="mb-1.5 text-xs font-medium text-brand-ink/70">
+          Uitgezonden wedstrijd(en) — kies 1 of 2 (elke wedstrijd = een eigen dagspel):
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <MatchSelect defaultValue={slot1} options={matchOptions} />
+          <MatchSelect defaultValue={slot2} options={matchOptions} />
+          <button className="rounded bg-brand-accent px-2.5 py-1.5 text-xs font-medium text-white">
+            Wedstrijd(en) opslaan
+          </button>
+        </div>
+        {e.dagspellen.length > 0 && (
+          <p className="mt-1.5 text-[11px] text-brand-ink/55">Nu aangewezen: {e.dagspellen.map((d) => d.label).join(" · ")}</p>
+        )}
+      </form>
+    </div>
   );
 }
 
