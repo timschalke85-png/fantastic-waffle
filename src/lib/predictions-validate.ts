@@ -82,7 +82,25 @@ export function validateRanking(
   return { ok: true };
 }
 
-/** A group match is predictable/scoreable iff it kicks off at or after the lock. */
-export function isEligibleMatch(kickoffUtc: Date, groupLockUtc: Date): boolean {
-  return kickoffUtc.getTime() >= groupLockUtc.getTime();
+/**
+ * Scoring-eligibility floor: a group match counts toward points iff it kicks off
+ * at or after the eligibility floor (group_eligibility_floor_utc). This is the
+ * fixed fairness anchor (matches played before the pool opened are excluded) and
+ * is deliberately DECOUPLED from the input deadline — see isMatchEditable.
+ */
+export function isEligibleMatch(kickoffUtc: Date, eligibilityFloorUtc: Date): boolean {
+  return kickoffUtc.getTime() >= eligibilityFloorUtc.getTime();
+}
+
+/**
+ * Per-match input lock: a group match is editable iff it has NOT kicked off yet
+ * AND the global input deadline (group_lock_utc) has not passed. Either bound
+ * closes it. `globalLockUtc === null` means no global deadline is set, so only
+ * the per-match kickoff applies. Enforced server-side in the save action, not
+ * just the UI.
+ */
+export function isMatchEditable(kickoffUtc: Date, nowMs: number, globalLockUtc: Date | null): boolean {
+  if (nowMs >= kickoffUtc.getTime()) return false;
+  if (globalLockUtc !== null && nowMs >= globalLockUtc.getTime()) return false;
+  return true;
 }

@@ -7,6 +7,7 @@ import {
   parseScoreline,
   validateRanking,
   isEligibleMatch,
+  isMatchEditable,
 } from "../src/lib/predictions-validate";
 
 describe("isValidPin", () => {
@@ -98,5 +99,28 @@ describe("isEligibleMatch", () => {
   });
   it("excludes matches before the lock", () => {
     expect(isEligibleMatch(new Date("2026-06-11T16:00:00Z"), lock)).toBe(false);
+  });
+});
+
+describe("isMatchEditable", () => {
+  const globalLock = new Date("2026-06-20T17:00:00Z"); // NL–Sweden
+  const kickoff = new Date("2026-06-18T16:00:00Z");
+  const ms = (iso: string) => new Date(iso).getTime();
+
+  it("is editable before kickoff and before the global lock", () => {
+    expect(isMatchEditable(kickoff, ms("2026-06-17T12:00:00Z"), globalLock)).toBe(true);
+  });
+  it("is locked once the match has kicked off (even before the global lock)", () => {
+    expect(isMatchEditable(kickoff, ms("2026-06-18T16:00:00Z"), globalLock)).toBe(false); // exactly at kickoff
+    expect(isMatchEditable(kickoff, ms("2026-06-18T16:00:01Z"), globalLock)).toBe(false);
+  });
+  it("is locked once the global deadline has passed (even if the match is still in the future)", () => {
+    const lateKickoff = new Date("2026-06-25T23:00:00Z");
+    expect(isMatchEditable(lateKickoff, ms("2026-06-20T17:00:00Z"), globalLock)).toBe(false); // exactly at global lock
+    expect(isMatchEditable(lateKickoff, ms("2026-06-21T09:00:00Z"), globalLock)).toBe(false);
+  });
+  it("with no global lock set, only the per-match kickoff applies", () => {
+    expect(isMatchEditable(kickoff, ms("2026-06-17T12:00:00Z"), null)).toBe(true);
+    expect(isMatchEditable(kickoff, ms("2026-06-19T12:00:00Z"), null)).toBe(false);
   });
 });
