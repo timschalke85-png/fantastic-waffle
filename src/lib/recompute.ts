@@ -6,7 +6,7 @@
 // single batched read + one transaction of upserts.
 import "server-only";
 import { prisma } from "./db";
-import { getGroupLockUtc } from "./settings";
+import { getGroupEligibilityFloorUtc } from "./settings";
 import {
   buildScoringContext,
   computeAllScores,
@@ -21,8 +21,8 @@ export interface RecomputeResult {
 }
 
 export async function recomputeScores(): Promise<RecomputeResult> {
-  const [groupLock, teams, matches, participants] = await Promise.all([
-    getGroupLockUtc(),
+  const [eligibilityFloor, teams, matches, participants] = await Promise.all([
+    getGroupEligibilityFloorUtc(),
     prisma.team.findMany({ select: { id: true, nameNl: true, fifaCode: true, groupLetter: true } }),
     prisma.match.findMany({
       select: {
@@ -59,7 +59,7 @@ export async function recomputeScores(): Promise<RecomputeResult> {
     }),
   ]);
 
-  const ctx = buildScoringContext(teams as TeamRow[], matches as MatchRow[], groupLock);
+  const ctx = buildScoringContext(teams as TeamRow[], matches as MatchRow[], eligibilityFloor);
 
   const bundles: ParticipantPredictions[] = participants.map((p) => ({
     participantId: p.id,

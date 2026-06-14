@@ -1,7 +1,8 @@
 // Pure aggregation layer (Fase 7, Stap 2). Turns raw predictions + match results
 // into per-participant score totals, applying the gating rules from SCORING.md:
 //  - only FINISHED matches count; unfilled predictions score 0;
-//  - a group match scores per-match only if eligible (kickoff_utc >= group_lock);
+//  - a group match scores only if eligible (kickoff_utc >= the eligibility floor,
+//    group_eligibility_floor_utc — decoupled from the input deadline group_lock_utc);
 //  - team-goals score only once that team's own group matches are all FINISHED;
 //  - a group's eindstand (Poule F 1–4 / other nr.1-2) scores only once ALL of
 //    THAT group's matches are FINISHED (per-group gating);
@@ -92,14 +93,14 @@ interface GroupCtx {
 }
 
 export interface ScoringContext {
-  groupLock: Date | null;
+  eligibilityFloor: Date | null;
   groupMatches: Map<string, GroupMatchActual>; // FINISHED group matches, with eligibility flag
   teamGoalsActual: Map<string, number | null>; // Poule F teamId -> total goals if complete, else null
   groups: Map<string, GroupCtx>;
   knockout: Map<string, KnockoutActual & { stage: KnockoutStageKey }>;
 }
 
-export function buildScoringContext(teams: TeamRow[], matches: MatchRow[], groupLock: Date | null): ScoringContext {
+export function buildScoringContext(teams: TeamRow[], matches: MatchRow[], eligibilityFloor: Date | null): ScoringContext {
   const teamsByGroup = new Map<string, StandingTeam[]>();
   for (const t of teams) {
     const list = teamsByGroup.get(t.groupLetter) ?? [];
@@ -113,7 +114,7 @@ export function buildScoringContext(teams: TeamRow[], matches: MatchRow[], group
   const groupMatches = new Map<string, GroupMatchActual>();
   for (const m of allGroupMatches) {
     if (!isFinished(m)) continue;
-    const eligible = groupLock != null && m.kickoffUtc.getTime() >= groupLock.getTime();
+    const eligible = eligibilityFloor != null && m.kickoffUtc.getTime() >= eligibilityFloor.getTime();
     groupMatches.set(m.id, { home: m.homeScore!, away: m.awayScore!, groupLetter: m.groupLetter!, eligible });
   }
 
@@ -177,7 +178,7 @@ export function buildScoringContext(teams: TeamRow[], matches: MatchRow[], group
     });
   }
 
-  return { groupLock, groupMatches, teamGoalsActual, groups, knockout };
+  return { eligibilityFloor, groupMatches, teamGoalsActual, groups, knockout };
 }
 
 export function scoreParticipant(p: ParticipantPredictions, ctx: ScoringContext): ParticipantScore {
