@@ -448,6 +448,12 @@ function EveningCard({ e, matchOptions }: { e: AdminEveningRow; matchOptions: { 
         </span>
       </div>
 
+      {e.checkinNames.length > 0 && (
+        <p className="mb-2 text-[11px] text-brand-ink/60">
+          <span className="font-medium">Ingecheckt:</span> {e.checkinNames.join(", ")}
+        </p>
+      )}
+
       <div className="flex flex-wrap items-end gap-4">
         {/* Dagcode */}
         <form action={setEveningCodeAction} className="flex items-end gap-1.5">

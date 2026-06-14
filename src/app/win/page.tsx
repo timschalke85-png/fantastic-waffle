@@ -62,12 +62,34 @@ async function Loaded({ participantId }: { participantId: string }) {
       <p className="mb-4 rounded-lg bg-wk-field/10 px-3 py-2 text-[12px] text-brand-ink/75">
         Vanavond: <strong>{evening.label}</strong>
       </p>
-      {!data.checkedIn ? <CheckInBlock /> : <CheckedInBlock data={data} prizes={prizes} />}
+      {!data.checkedIn ? <CheckInBlock prizes={prizes} /> : <CheckedInBlock data={data} prizes={prizes} />}
+      <AttendeesBlock names={data.checkedInNames} />
     </>
   );
 }
 
-function CheckInBlock() {
+function AttendeesBlock({ names }: { names: string[] }) {
+  return (
+    <section className="mt-6">
+      <h2 className="mb-2 text-sm font-semibold">Wie is er vanavond ({names.length})</h2>
+      {names.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-brand-ink/20 p-3 text-center text-[12px] text-brand-ink/55">
+          Nog niemand ingecheckt — wees de eerste!
+        </p>
+      ) : (
+        <ul className="flex flex-wrap gap-1.5">
+          {names.map((n) => (
+            <li key={n} className="rounded-full bg-wk-field/10 px-2.5 py-1 text-[12px] font-medium text-brand-ink/80">
+              {n}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function CheckInBlock({ prizes }: { prizes: PrizeTexts }) {
   return (
     <section className="space-y-3">
       <div className="rounded-xl border-2 border-brand-accent/40 bg-brand-accent/10 p-4">
@@ -76,6 +98,10 @@ function CheckInBlock() {
           In het restaurant hangt een code (op een bord of kaartje). Voer 'm hieronder in als bewijs dat je
           er bent. Inchecken doet twee dingen: je speelt mee voor de <strong>avondprijzen</strong>, en de
           avond telt mee voor de <strong>hoofdprijs</strong> aan het eind (minimaal 3 avonden aanwezig).
+        </p>
+        <p className="mt-2 text-[12px] leading-snug text-brand-ink/80">
+          En onder <strong>álle aanwezigen</strong> wordt een <strong>Lucky Loser</strong>-prijs verloot
+          (<strong>{prizes.luckyLoser}</strong>) — ongeacht je voorspelling. Aanwezig zijn loont dus sowieso.
         </p>
       </div>
       <CheckInForm />
@@ -105,8 +131,12 @@ function CheckedInBlock({ data, prizes }: { data: WinData; prizes: PrizeTexts })
           <strong>+{DAILY_SCORING.correctOutcome}</strong> juiste uitslag.
         </p>
         <p className="mt-2 text-[12px] text-brand-ink/70">
-          Dagwinnaar (beste voorspelling) wint: <strong>{prizes.daywinner}</strong>. Bij een gelijke stand
-          wordt de prijs gedeeld.
+          <strong>Dagwinnaar</strong> (beste voorspelling) wint: <strong>{prizes.daywinner}</strong>. Bij een
+          gelijke stand wordt de prijs gedeeld.
+        </p>
+        <p className="mt-1 text-[12px] text-brand-ink/70">
+          <strong>Lucky Loser</strong>: onder álle aanwezigen wordt sowieso een prijs verloot
+          (<strong>{prizes.luckyLoser}</strong>), ongeacht je voorspelling — meedoen loont dus altijd.
         </p>
       </div>
 
