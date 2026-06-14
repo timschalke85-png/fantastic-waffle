@@ -14,6 +14,13 @@ import {
   updateProfileAction,
   type SaveResult,
 } from "@/app/voorspellen/actions";
+// Exacte puntwaarden uit de centrale config (CLAUDE.md Hard rule 4 — nooit hardcoden).
+import { POULE_F, OTHER_GROUPS } from "@/config/scoring";
+
+/** Short, friendly one-liner explaining a section + its points. */
+function SectionHint({ children }: { children: React.ReactNode }) {
+  return <p className="mb-2 text-[11px] leading-snug text-brand-ink/55">{children}</p>;
+}
 
 type Status = "idle" | "saving" | "saved" | "error";
 
@@ -190,12 +197,18 @@ function MatchesSection({
     return <p className="text-[11px] text-brand-ink/50">Geen voorspelbare wedstrijden in deze poule (alle wedstrijden vóór de deadline).</p>;
   }
 
+  const cfg = group.letter === "F" ? POULE_F.match : OTHER_GROUPS.match;
+
   return (
     <div className="mb-4">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-brand-ink/60">Uitslagen</h3>
         <SaveBadge status={status} />
       </div>
+      <SectionHint>
+        Voorspel de exacte uitslag van elke wedstrijd. Exact goed: <strong>{cfg.exactScore} punten</strong> ·
+        juiste uitslag (winst/gelijk/verlies): <strong>{cfg.correctOutcome} punten</strong>.
+      </SectionHint>
       <ul className="space-y-2">
         {group.matches.map((m) => {
           const s = scores[m.id] ?? { home: "", away: "" };
@@ -275,6 +288,10 @@ function TeamGoalsSection({
         <h3 className="text-xs font-semibold uppercase tracking-wide text-brand-ink/60">Doelpunten per land (3 wedstrijden)</h3>
         <SaveBadge status={status} />
       </div>
+      <SectionHint>
+        Voorspel hoeveel doelpunten elk land in totaal maakt over zijn drie groepswedstrijden.{" "}
+        <strong>{POULE_F.teamGoalsExact} punten</strong> per land dat je exact goed hebt.
+      </SectionHint>
       <ul className="grid grid-cols-2 gap-2">
         {group.teams.map((t) => (
           <li key={t.id} className="flex items-center justify-between gap-2 text-sm">
@@ -330,6 +347,17 @@ function RankSection({
         <h3 className="text-xs font-semibold uppercase tracking-wide text-brand-ink/60">{label}</h3>
         <SaveBadge status={status} />
       </div>
+      {group.letter === "F" ? (
+        <SectionHint>
+          Voorspel de volgorde van de poule (1 t/m 4). <strong>{POULE_F.standing.perCorrectPosition} punten</strong>{" "}
+          per juiste positie, plus <strong>{POULE_F.standing.allFourBonus} bonus</strong> als alle vier kloppen.
+        </SectionHint>
+      ) : (
+        <SectionHint>
+          Voorspel wie als 1e en 2e eindigt. <strong>{OTHER_GROUPS.standing.correctFirst} punten</strong> voor de
+          juiste nr. 1 en <strong>{OTHER_GROUPS.standing.correctSecond} punten</strong> voor de juiste nr. 2.
+        </SectionHint>
+      )}
       <ul className="space-y-1.5">
         {positions.map((pos) => (
           <li key={pos} className="flex items-center gap-2 text-sm">

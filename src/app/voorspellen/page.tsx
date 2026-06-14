@@ -51,10 +51,29 @@ async function Loaded({
   const data = await loadPredictionForm(participantId);
   return (
     <>
-      {data.lockIso && !data.locked && (
-        <p className="mb-4 text-[12px] text-brand-ink/55">
-          Bewerkbaar tot de deadline: <strong>{fmtDateTimeAms(data.lockIso)}</strong> (Europe/Amsterdam).
-        </p>
+      {!data.locked && (
+        <section className="mb-4 rounded-xl border border-brand-ink/15 bg-brand-ink/[0.02] p-4">
+          <h2 className="text-sm font-semibold">Zo verdien je punten</h2>
+          <ul className="mt-1.5 space-y-1 text-[12px] leading-snug text-brand-ink/70">
+            <li>
+              <strong>Vul álle poules in</strong>, niet alleen die van Oranje — elke poule levert punten op.
+              Poule F telt wel dubbel, want dat is dé groep van dit toernooi.
+            </li>
+            <li>
+              Je kunt alles invullen <strong>én aanpassen</strong>
+              {data.lockIso ? <> tot de deadline ({fmtDateTimeAms(data.lockIso)}, Europe/Amsterdam)</> : null}.
+              Daarna staan je voorspellingen vast.
+            </li>
+            <li>
+              Een wedstrijd die <strong>al begonnen</strong> is, kun je niet meer voorspellen — die telt dan
+              niet meer mee voor jouw klassement.
+            </li>
+            <li>
+              Wie tot het laatste moment wacht, kan dus punten mislopen. Later instappen mag altijd: je speelt
+              gewoon mee vanaf wat nog openstaat.
+            </li>
+          </ul>
+        </section>
       )}
       <PredictionForm data={data} participant={participant!} />
       <KnockoutPanel participantId={participantId} />
