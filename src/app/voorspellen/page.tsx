@@ -81,9 +81,10 @@ async function KnockoutPanel({ participantId }: { participantId: string }) {
     );
   }
   return (
-    <section className="mt-6 rounded-lg border border-brand-accent/50 p-4">
+    <section className="mt-6 rounded-xl border-2 border-brand-accent/60 bg-brand-accent/5 p-4">
       <h2 className="mb-1 text-sm font-semibold">
-        Knock-out voorspelronde — {data.locked ? "gesloten" : "geopend"}
+        <span className="mr-2 rounded bg-brand-accent px-2 py-0.5 text-white">Knock-out</span>
+        Voorspelronde — {data.locked ? "gesloten" : "geopend"}
       </h2>
       {data.lockIso && !data.locked && (
         <p className="mb-3 text-[12px] text-brand-ink/55">
