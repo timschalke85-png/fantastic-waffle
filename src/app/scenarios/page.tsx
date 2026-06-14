@@ -95,16 +95,19 @@ function QualificationSummaryBlock({ summary }: { summary: QualificationSummary 
   );
 }
 
-function TeamCell({ ref }: { ref: BracketSlotProjection["home"] }) {
-  if (ref.team) {
+// NB: the prop is `proj`, never `ref` — `ref` is a reserved React prop and
+// passing a value as `ref` to a component throws in the production RSC build
+// ("Refs cannot be used in Server Components, nor passed to Client Components").
+function TeamCell({ proj }: { proj: BracketSlotProjection["home"] }) {
+  if (proj.team) {
     return (
       <span>
-        {ref.team.nameNl}
-        <span className="ml-1 text-[10px] text-brand-ink/40">{ref.label}</span>
+        {proj.team.nameNl}
+        <span className="ml-1 text-[10px] text-brand-ink/40">{proj.label}</span>
       </span>
     );
   }
-  return <span className="text-brand-ink/50">{ref.label}</span>;
+  return <span className="text-brand-ink/50">{proj.label}</span>;
 }
 
 function ProjectedBracketBlock({ bracket }: { bracket: BracketSlotProjection[] }) {
@@ -122,11 +125,11 @@ function ProjectedBracketBlock({ bracket }: { bracket: BracketSlotProjection[] }
               Wedstrijd {s.matchNumber}
             </div>
             <div className="flex items-center justify-between gap-2">
-              <TeamCell ref={s.home} />
+              <TeamCell proj={s.home} />
             </div>
             <div className="my-0.5 text-center text-[10px] text-brand-ink/30">vs</div>
             <div className="flex items-center justify-between gap-2">
-              <TeamCell ref={s.away} />
+              <TeamCell proj={s.away} />
             </div>
           </li>
         ))}
