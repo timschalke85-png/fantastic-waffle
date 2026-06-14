@@ -7,7 +7,7 @@ import { loadPredictionForm } from "@/lib/predictions";
 import { loadKnockoutData } from "@/lib/knockout-data";
 import { LoginForm } from "@/components/voorspellen/LoginForm";
 import { PredictionForm } from "@/components/voorspellen/PredictionForm";
-import { KnockoutBracket } from "@/components/voorspellen/KnockoutBracket";
+import { KnockoutBracket, KnockoutBracketReadonly } from "@/components/voorspellen/KnockoutBracket";
 import { fmtDateTimeAms } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -64,8 +64,8 @@ async function Loaded({
 
 // Knock-out voorspelronde (Fase 6). Gated behind settings.knockout_open. Once the
 // admin opens it (~28 June, all group matches final + R32 known), the interactive
-// picker is shown. Stap 5 adds the full locked read-only view; for now a locked
-// round shows a short notice. All writes are re-validated server-side in ./actions.
+// picker is shown; after knockout_lock_utc it becomes a frozen read-only view of
+// the participant's saved bracket. All writes are re-validated server-side too.
 async function KnockoutPanel({ participantId }: { participantId: string }) {
   const data = await loadKnockoutData(participantId);
   if (!data.open) {
@@ -82,20 +82,15 @@ async function KnockoutPanel({ participantId }: { participantId: string }) {
   }
   return (
     <section className="mt-6 rounded-lg border border-brand-accent/50 p-4">
-      <h2 className="mb-1 text-sm font-semibold">Knock-out voorspelronde — geopend</h2>
+      <h2 className="mb-1 text-sm font-semibold">
+        Knock-out voorspelronde — {data.locked ? "gesloten" : "geopend"}
+      </h2>
       {data.lockIso && !data.locked && (
         <p className="mb-3 text-[12px] text-brand-ink/55">
           Bewerkbaar tot {fmtDateTimeAms(data.lockIso)} (Europe/Amsterdam).
         </p>
       )}
-      {data.locked ? (
-        <p className="mt-1 text-[12px] text-brand-ink/55">
-          De deadline is verstreken; je knock-out bracket is gesloten. Het volledige overzicht van je
-          opgeslagen bracket verschijnt hier binnenkort.
-        </p>
-      ) : (
-        <KnockoutBracket data={data} />
-      )}
+      {data.locked ? <KnockoutBracketReadonly data={data} /> : <KnockoutBracket data={data} />}
     </section>
   );
 }

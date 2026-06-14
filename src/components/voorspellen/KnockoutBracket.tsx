@@ -192,24 +192,7 @@ export function KnockoutBracket({ data }: { data: KnockoutData }) {
         <SaveBadge status={status} />
       </div>
 
-      {/* Round tabs */}
-      <div className="mb-3 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Knock-out rondes">
-        {ROUNDS.map((r) => (
-          <button
-            key={r.key}
-            role="tab"
-            aria-selected={r.key === activeRound}
-            onClick={() => setActiveRound(r.key)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-              r.key === activeRound
-                ? "bg-brand-accent text-white"
-                : "bg-brand-ink/5 text-brand-ink/60 hover:bg-brand-ink/10"
-            }`}
-          >
-            {r.short}
-          </button>
-        ))}
-      </div>
+      <RoundTabs active={activeRound} onSelect={setActiveRound} />
 
       <h3 className="mb-2 text-sm font-semibold">{round.title}</h3>
       <ul className="space-y-2">
@@ -409,5 +392,132 @@ function CascadeDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---- Round tab bar (shared by the editable + read-only views) ---- */
+
+function RoundTabs({ active, onSelect }: { active: string; onSelect: (k: string) => void }) {
+  return (
+    <div className="mb-3 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Knock-out rondes">
+      {ROUNDS.map((r) => (
+        <button
+          key={r.key}
+          role="tab"
+          aria-selected={r.key === active}
+          onClick={() => onSelect(r.key)}
+          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+            r.key === active
+              ? "bg-brand-accent text-white"
+              : "bg-brand-ink/5 text-brand-ink/60 hover:bg-brand-ink/10"
+          }`}
+        >
+          {r.short}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ---- Read-only / locked view (after knockout_lock_utc) ---- */
+
+// Frozen bracket: no inputs, no autosave, no cascade. The participant's saved
+// picks are shown, with R16+ teams resolved from their own winner-picks via the
+// SAME engine path as the editable view (derivePicks + resolveTie), so a known
+// downstream team renders correctly instead of "nog te bepalen".
+export function KnockoutBracketReadonly({ data }: { data: KnockoutData }) {
+  const r32 = data.r32;
+  const teams = data.teams;
+  const [activeRound, setActiveRound] = useState("R32");
+
+  const cells = useMemo(() => initialCells(data.existing), [data.existing]);
+  const picks = useMemo(() => derivePicks(cells, r32), [cells, r32]);
+  const tieOf = useMemo(() => {
+    const memo = new Map<number, TieTeams>();
+    const m: Record<number, TieTeams> = {};
+    for (const slot of ALL_SLOTS) m[slot] = resolveTie(slot, r32, picks, memo);
+    return m;
+  }, [picks, r32]);
+
+  const hasPicks = Object.keys(data.existing).length > 0;
+  const round = ROUNDS.find((r) => r.key === activeRound)!;
+
+  return (
+    <div>
+      <div className="mb-3 rounded-lg bg-brand-ink px-4 py-3 text-white">
+        <p className="text-sm font-semibold">Knock-out vergrendeld</p>
+        <p className="text-[12px] text-white/80">
+          De deadline is verstreken. Hieronder staat je opgeslagen bracket — wijzigen kan niet meer.
+        </p>
+      </div>
+
+      {!hasPicks ? (
+        <p className="rounded-lg border border-dashed border-brand-ink/20 p-4 text-center text-[12px] text-brand-ink/55">
+          Je hebt geen knock-out voorspellingen opgeslagen.
+        </p>
+      ) : (
+        <>
+          <RoundTabs active={activeRound} onSelect={setActiveRound} />
+          <h3 className="mb-2 text-sm font-semibold">{round.title}</h3>
+          <ul className="space-y-2">
+            {round.slots.map((slot) => (
+              <ReadonlyCard key={slot} slot={slot} tie={tieOf[slot]} cell={cells[slot]} teams={teams} />
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ReadonlyCard({
+  slot,
+  tie,
+  cell,
+  teams,
+}: {
+  slot: number;
+  tie: TieTeams;
+  cell: Cell | undefined;
+  teams: Record<string, KnockoutTeam>;
+}) {
+  const stage = STAGE_NL[KO_STAGE_OF[slot]] ?? "";
+  const home = tie.home ? teams[tie.home] : null;
+  const away = tie.away ? teams[tie.away] : null;
+  const known = !!home && !!away;
+  const filled = !!cell && cell.home !== "" && cell.away !== "";
+  const winner = cell ? effWinner(cell, tie) : null;
+
+  return (
+    <li className="rounded-lg border border-brand-ink/15 bg-white p-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-brand-ink/45">
+        {stage} <span className="text-brand-ink/30">· wedstrijd {slot}</span>
+      </p>
+
+      {!known ? (
+        <p className="py-1 text-center text-[12px] text-brand-ink/40">Niet voorspeld.</p>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="flex flex-1 items-center justify-end gap-2 truncate text-right">
+              <span className={`truncate ${winner === home!.id ? "font-bold" : ""}`}>{home!.nameNl}</span>
+              <TeamCrest src={home!.crestUrl} code={home!.fifaCode} />
+            </span>
+            <span className="w-14 text-center tabular font-semibold">
+              {filled ? `${cell!.home}–${cell!.away}` : "—"}
+            </span>
+            <span className="flex flex-1 items-center gap-2 truncate">
+              <TeamCrest src={away!.crestUrl} code={away!.fifaCode} />
+              <span className={`truncate ${winner === away!.id ? "font-bold" : ""}`}>{away!.nameNl}</span>
+            </span>
+          </div>
+          {winner && (
+            <p className="mt-1.5 text-center text-[11px] font-semibold text-brand-accent">
+              → {teams[winner]?.nameNl} gaat door
+            </p>
+          )}
+        </>
+      )}
+    </li>
   );
 }
