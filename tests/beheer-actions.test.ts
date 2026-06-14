@@ -4,7 +4,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { prisma, isAdmin, redirect } = vi.hoisted(() => ({
-  prisma: { participant: { findUnique: vi.fn(), delete: vi.fn() } },
+  prisma: {
+    participant: { findUnique: vi.fn(), delete: vi.fn() },
+    evening: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    eveningMatch: { deleteMany: vi.fn(), create: vi.fn() },
+    $transaction: vi.fn(async (ops: unknown[]) => ops),
+  },
   isAdmin: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
@@ -19,7 +24,13 @@ vi.mock("@/lib/recompute", () => ({ recomputeScores: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { deleteParticipantAction } from "../src/app/beheer/actions";
+import {
+  deleteParticipantAction,
+  createEveningAction,
+  activateEveningAction,
+  setEveningMatchesAction,
+  togglePollAction,
+} from "../src/app/beheer/actions";
 
 const fd = (obj: Record<string, string>) => {
   const f = new FormData();
@@ -59,5 +70,66 @@ describe("deleteParticipantAction", () => {
     await expect(deleteParticipantAction(fd({}))).rejects.toThrow("REDIRECT:/beheer?error=participant");
     expect(prisma.participant.findUnique).not.toHaveBeenCalled();
     expect(prisma.participant.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("prijzenpoule avond-beheer", () => {
+  beforeEach(() => isAdmin.mockResolvedValue(true));
+
+  it("createEvening rejects a non-admin and does not create", async () => {
+    isAdmin.mockResolvedValue(false);
+    await expect(createEveningAction(fd({ label: "Avond 1" }))).rejects.toThrow("REDIRECT:/beheer?error=auth");
+    expect(prisma.evening.create).not.toHaveBeenCalled();
+  });
+
+  it("createEvening rejects an empty label", async () => {
+    await expect(createEveningAction(fd({ label: "  " }))).rejects.toThrow("REDIRECT:/beheer?error=evening_label");
+    expect(prisma.evening.create).not.toHaveBeenCalled();
+  });
+
+  it("createEvening creates with the trimmed label", async () => {
+    await expect(createEveningAction(fd({ label: " Avond 1 " }))).rejects.toThrow("REDIRECT:/beheer?saved=evening");
+    expect(prisma.evening.create).toHaveBeenCalledWith({ data: { label: "Avond 1" } });
+  });
+
+  it("activateEvening clears all then activates exactly one (single transaction)", async () => {
+    await expect(activateEveningAction(fd({ eveningId: "e1" }))).rejects.toThrow("REDIRECT:/beheer?saved=evening");
+    expect(prisma.evening.updateMany).toHaveBeenCalledWith({ where: { isActive: true }, data: { isActive: false } });
+    expect(prisma.evening.update).toHaveBeenCalledWith({ where: { id: "e1" }, data: { isActive: true } });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("setEveningMatches rejects zero matches", async () => {
+    const f = new FormData();
+    f.set("eveningId", "e1");
+    await expect(setEveningMatchesAction(f)).rejects.toThrow("REDIRECT:/beheer?error=evening_matches");
+    expect(prisma.eveningMatch.create).not.toHaveBeenCalled();
+  });
+
+  it("setEveningMatches rejects more than two matches", async () => {
+    const f = new FormData();
+    f.set("eveningId", "e1");
+    f.append("matchId", "m1");
+    f.append("matchId", "m2");
+    f.append("matchId", "m3");
+    await expect(setEveningMatchesAction(f)).rejects.toThrow("REDIRECT:/beheer?error=evening_matches");
+    expect(prisma.eveningMatch.create).not.toHaveBeenCalled();
+  });
+
+  it("setEveningMatches replaces with ordered EveningMatch rows (deleteMany + creates)", async () => {
+    const f = new FormData();
+    f.set("eveningId", "e1");
+    f.append("matchId", "m1");
+    f.append("matchId", "m2");
+    await expect(setEveningMatchesAction(f)).rejects.toThrow("REDIRECT:/beheer?saved=evening");
+    expect(prisma.eveningMatch.deleteMany).toHaveBeenCalledWith({ where: { eveningId: "e1" } });
+    expect(prisma.eveningMatch.create).toHaveBeenCalledTimes(2);
+    expect(prisma.eveningMatch.create).toHaveBeenNthCalledWith(1, { data: { eveningId: "e1", matchId: "m1", ordinal: 1 } });
+    expect(prisma.eveningMatch.create).toHaveBeenNthCalledWith(2, { data: { eveningId: "e1", matchId: "m2", ordinal: 2 } });
+  });
+
+  it("togglePoll sets pollOpen from the 'open' field", async () => {
+    await expect(togglePollAction(fd({ eveningId: "e1", open: "true" }))).rejects.toThrow("REDIRECT:/beheer?saved=evening");
+    expect(prisma.evening.update).toHaveBeenCalledWith({ where: { id: "e1" }, data: { pollOpen: true } });
   });
 });

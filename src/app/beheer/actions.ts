@@ -154,3 +154,80 @@ export async function recomputeAction(): Promise<void> {
   revalidatePath("/klassement");
   redirect(`/beheer?recompute=${r.participants}`);
 }
+
+// --- Prijzenpoule: avond-beheer (admin) ------------------------------------
+
+function revalidatePrijzenpoule(): void {
+  revalidatePath("/beheer");
+  revalidatePath("/win");
+}
+
+export async function createEveningAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const label = String(formData.get("label") ?? "").trim();
+  if (!label) redirect("/beheer?error=evening_label");
+  await prisma.evening.create({ data: { label } });
+  revalidatePrijzenpoule();
+  redirect("/beheer?saved=evening");
+}
+
+export async function setEveningCodeAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("eveningId") ?? "");
+  if (!id) redirect("/beheer?error=evening");
+  const code = String(formData.get("checkInCode") ?? "").trim();
+  await prisma.evening.update({ where: { id }, data: { checkInCode: code || null } });
+  revalidatePrijzenpoule();
+  redirect("/beheer?saved=evening");
+}
+
+/** Activate one evening as "vanavond". Exactly one stays active: clear all, then
+ *  set this one — atomically in a single transaction. */
+export async function activateEveningAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("eveningId") ?? "");
+  if (!id) redirect("/beheer?error=evening");
+  await prisma.$transaction([
+    prisma.evening.updateMany({ where: { isActive: true }, data: { isActive: false } }),
+    prisma.evening.update({ where: { id }, data: { isActive: true } }),
+  ]);
+  revalidatePrijzenpoule();
+  redirect("/beheer?saved=evening");
+}
+
+export async function deactivateEveningAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("eveningId") ?? "");
+  if (!id) redirect("/beheer?error=evening");
+  await prisma.evening.update({ where: { id }, data: { isActive: false } });
+  revalidatePrijzenpoule();
+  redirect("/beheer?saved=evening");
+}
+
+/** Assign the 1 or 2 broadcast matches of an evening (each = one dagspel).
+ *  Replace-strategy: clear the evening's EveningMatch rows, then recreate. */
+export async function setEveningMatchesAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("eveningId") ?? "");
+  if (!id) redirect("/beheer?error=evening");
+  const matchIds = [...new Set(formData.getAll("matchId").map(String).filter(Boolean))];
+  if (matchIds.length < 1 || matchIds.length > 2) redirect("/beheer?error=evening_matches");
+  await prisma.$transaction([
+    prisma.eveningMatch.deleteMany({ where: { eveningId: id } }),
+    ...matchIds.map((matchId, i) =>
+      prisma.eveningMatch.create({ data: { eveningId: id, matchId, ordinal: i + 1 } }),
+    ),
+  ]);
+  revalidatePrijzenpoule();
+  redirect("/beheer?saved=evening");
+}
+
+export async function togglePollAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("eveningId") ?? "");
+  if (!id) redirect("/beheer?error=evening");
+  const open = String(formData.get("open") ?? "") === "true";
+  await prisma.evening.update({ where: { id }, data: { pollOpen: open } });
+  revalidatePrijzenpoule();
+  redirect("/beheer?saved=evening");
+}
