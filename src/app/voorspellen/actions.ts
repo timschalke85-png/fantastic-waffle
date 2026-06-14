@@ -16,7 +16,7 @@ import {
   markFirstSubmission,
 } from "@/lib/participant-auth";
 import { eligibleGroupMatchIds } from "@/lib/predictions";
-import { parseScoreline, parseGoals, validateRanking } from "@/lib/predictions-validate";
+import { parseScoreline, parseGoals, validateRanking, isMatchEditable } from "@/lib/predictions-validate";
 import {
   resolveTie,
   validateKnockoutPicks,
@@ -67,10 +67,25 @@ export async function saveGroupMatchesAction(
   if ("error" in guard) return { ok: false, error: guard.error };
   const eligible = await eligibleGroupMatchIds();
 
+  // Per-match input lock: a match is writable only while it has not kicked off.
+  // The global deadline (group_lock_utc) is already enforced by writableParticipant,
+  // so here we pass null and check the per-match kickoff bound only.
+  const now = Date.now();
+  const kickoffById = new Map<string, Date>(
+    (
+      await prisma.match.findMany({
+        where: { id: { in: items.map((i) => i.matchId) }, stage: "GROUP" },
+        select: { id: true, kickoffUtc: true },
+      })
+    ).map((m) => [m.id, m.kickoffUtc]),
+  );
+
   const toUpsert: { matchId: string; home: number; away: number }[] = [];
   const toClear: string[] = [];
   for (const it of items) {
     if (!eligible.has(it.matchId)) return { ok: false, error: "ineligible" };
+    const ko = kickoffById.get(it.matchId);
+    if (!ko || !isMatchEditable(ko, now, null)) return { ok: false, error: "match_locked" };
     const p = parseScoreline(it.home, it.away);
     if (p.kind === "invalid") return { ok: false, error: "invalid" };
     if (p.kind === "empty") toClear.push(it.matchId);

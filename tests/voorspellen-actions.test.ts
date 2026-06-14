@@ -64,6 +64,14 @@ beforeEach(() => {
 });
 
 describe("saveGroupMatchesAction", () => {
+  beforeEach(() => {
+    // Default: queried matches kick off in the future -> per-match editable.
+    prisma.match.findMany.mockResolvedValue([
+      { id: "m1", kickoffUtc: FUTURE },
+      { id: "m2", kickoffUtc: FUTURE },
+    ]);
+  });
+
   it("rejects when no participant session", async () => {
     currentParticipant.mockResolvedValue(null);
     getGroupLockUtc.mockResolvedValue(FUTURE);
@@ -106,6 +114,26 @@ describe("saveGroupMatchesAction", () => {
     expect(res).toEqual({ ok: true });
     expect(prisma.predictionGroupMatch.upsert).toHaveBeenCalledTimes(1);
     expect(prisma.predictionGroupMatch.deleteMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a write to a match that already kicked off (per-match lock), even before the global deadline", async () => {
+    currentParticipant.mockResolvedValue({ id: "p1" });
+    getGroupLockUtc.mockResolvedValue(FUTURE); // global deadline still open
+    eligibleGroupMatchIds.mockResolvedValue(new Set(["m1"]));
+    prisma.match.findMany.mockResolvedValue([{ id: "m1", kickoffUtc: PAST }]); // already started
+    const res = await saveGroupMatchesAction([{ matchId: "m1", home: "1", away: "0" }]);
+    expect(res).toEqual({ ok: false, error: "match_locked" });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("saves an upcoming (not-yet-started) match normally under the per-match lock", async () => {
+    currentParticipant.mockResolvedValue({ id: "p1" });
+    getGroupLockUtc.mockResolvedValue(FUTURE);
+    eligibleGroupMatchIds.mockResolvedValue(new Set(["m2"]));
+    prisma.match.findMany.mockResolvedValue([{ id: "m2", kickoffUtc: FUTURE }]);
+    const res = await saveGroupMatchesAction([{ matchId: "m2", home: "2", away: "2" }]);
+    expect(res).toEqual({ ok: true });
+    expect(prisma.predictionGroupMatch.upsert).toHaveBeenCalledTimes(1);
   });
 });
 
