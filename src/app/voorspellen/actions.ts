@@ -9,7 +9,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getGroupLockUtc, getKnockoutLockUtc, isKnockoutOpen } from "@/lib/settings";
 import {
-  signInOrRegister,
+  registerParticipant,
+  signInParticipant,
   signOutParticipant,
   currentParticipant,
   updateProfile,
@@ -28,15 +29,26 @@ import { r32TeamsFromMatches } from "@/lib/knockout";
 
 export type SaveResult = { ok: true } | { ok: false; error: string };
 
-export async function loginAction(formData: FormData): Promise<void> {
-  const res = await signInOrRegister({
+/** Registreren-tab: create a NEW account. Never logs into an existing one. */
+export async function registerAction(formData: FormData): Promise<void> {
+  const res = await registerParticipant({
     nickname: String(formData.get("nickname") ?? ""),
     pin: String(formData.get("pin") ?? ""),
     fullName: String(formData.get("fullName") ?? ""),
     showFullName: formData.get("showFullName") === "on",
   });
   if (res.ok) redirect("/voorspellen");
-  redirect(`/voorspellen?error=${res.error}`);
+  redirect(`/voorspellen?tab=register&error=${res.error}`);
+}
+
+/** Inloggen-tab: sign in to an EXISTING account. Never creates one. */
+export async function signInAction(formData: FormData): Promise<void> {
+  const res = await signInParticipant({
+    nickname: String(formData.get("nickname") ?? ""),
+    pin: String(formData.get("pin") ?? ""),
+  });
+  if (res.ok) redirect("/voorspellen");
+  redirect(`/voorspellen?tab=login&error=${res.error}`);
 }
 
 export async function logoutAction(): Promise<void> {

@@ -66,54 +66,6 @@ export interface SignInInput {
 }
 
 /**
- * First save creates the participant; an existing bijnaam requires the correct
- * PIN. fullName/showFullName apply only at creation (returning users edit them
- * via updateProfile). Concurrency-safe: a duplicate insert (P2002) is reported
- * as "taken".
- */
-export async function signInOrRegister(input: SignInInput): Promise<AuthResult> {
-  const nickname = input.nickname.trim();
-  if (!isValidNickname(nickname)) return { ok: false, error: "nickname" };
-  if (!isValidPin(input.pin)) return { ok: false, error: "pin" };
-
-  const key = nicknameKey(nickname);
-  const existing = await prisma.participant.findUnique({ where: { nicknameKey: key } });
-  if (existing) {
-    const match = await bcrypt.compare(input.pin, existing.pinHash);
-    if (!match) return { ok: false, error: "wrong_pin" };
-    await setSession(existing);
-    return {
-      ok: true,
-      participant: { id: existing.id, nickname: existing.nickname, fullName: existing.fullName, showFullName: existing.showFullName },
-    };
-  }
-
-  const pinHash = await bcrypt.hash(input.pin, 10);
-  try {
-    const created = await prisma.participant.create({
-      data: {
-        nickname,
-        nicknameKey: key,
-        fullName: input.fullName?.trim() || null,
-        showFullName: !!input.showFullName,
-        pinHash,
-      },
-    });
-    await setSession(created);
-    return {
-      ok: true,
-      participant: { id: created.id, nickname: created.nickname, fullName: created.fullName, showFullName: created.showFullName },
-    };
-  } catch (e: unknown) {
-    // Unique violation -> someone claimed the bijnaam between check and insert.
-    if (typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === "P2002") {
-      return { ok: false, error: "taken" };
-    }
-    throw e;
-  }
-}
-
-/**
  * Register a NEW participant (Registreren tab). Rejects with "taken" if the
  * bijnaam already exists (case-insensitive, trimmed) — even with the correct PIN:
  * registering never logs into an existing account. Concurrency-safe: a duplicate

@@ -35,7 +35,8 @@ const {
 vi.mock("@/lib/db", () => ({ prisma }));
 vi.mock("@/lib/participant-auth", () => ({
   currentParticipant,
-  signInOrRegister: vi.fn(),
+  registerParticipant: vi.fn(),
+  signInParticipant: vi.fn(),
   signOutParticipant: vi.fn(),
   updateProfile: vi.fn(),
   markFirstSubmission: vi.fn(),

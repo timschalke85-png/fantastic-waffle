@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function Voorspellen({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; tab?: string }>;
 }) {
   const sp = await searchParams;
   const participant = await currentParticipant();
@@ -33,7 +33,7 @@ export default async function Voorspellen({
       )}
 
       {!participant ? (
-        <LoginForm error={sp.error} />
+        <LoginForm error={sp.error} tab={sp.tab} />
       ) : (
         <Loaded participantId={participant.id} participant={participant} />
       )}
