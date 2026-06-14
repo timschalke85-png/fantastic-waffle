@@ -3,7 +3,7 @@
 // redirect() throws in real Next, so the mock throws too and we assert on that.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { prisma, isAdmin, redirect } = vi.hoisted(() => ({
+const { prisma, isAdmin, redirect, setSetting } = vi.hoisted(() => ({
   prisma: {
     participant: { findUnique: vi.fn(), delete: vi.fn() },
     evening: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
@@ -11,6 +11,7 @@ const { prisma, isAdmin, redirect } = vi.hoisted(() => ({
     $transaction: vi.fn(async (ops: unknown[]) => ops),
   },
   isAdmin: vi.fn(),
+  setSetting: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
   }),
@@ -18,7 +19,7 @@ const { prisma, isAdmin, redirect } = vi.hoisted(() => ({
 
 vi.mock("@/lib/db", () => ({ prisma }));
 vi.mock("@/lib/admin-auth", () => ({ isAdmin, signIn: vi.fn(), signOut: vi.fn() }));
-vi.mock("@/lib/settings", () => ({ setSetting: vi.fn() }));
+vi.mock("@/lib/settings", () => ({ setSetting }));
 vi.mock("@/lib/refresh", () => ({ refreshMatchData: vi.fn() }));
 vi.mock("@/lib/recompute", () => ({ recomputeScores: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect }));
@@ -30,6 +31,7 @@ import {
   activateEveningAction,
   setEveningMatchesAction,
   togglePollAction,
+  updatePrizeTextsAction,
 } from "../src/app/beheer/actions";
 
 const fd = (obj: Record<string, string>) => {
@@ -131,5 +133,19 @@ describe("prijzenpoule avond-beheer", () => {
   it("togglePoll sets pollOpen from the 'open' field", async () => {
     await expect(togglePollAction(fd({ eveningId: "e1", open: "true" }))).rejects.toThrow("REDIRECT:/beheer?saved=evening");
     expect(prisma.evening.update).toHaveBeenCalledWith({ where: { id: "e1" }, data: { pollOpen: true } });
+  });
+
+  it("updatePrizeTexts rejects a non-admin and writes nothing", async () => {
+    isAdmin.mockResolvedValue(false);
+    await expect(updatePrizeTextsAction(fd({ prize_text_daywinner: "X" }))).rejects.toThrow("REDIRECT:/beheer?error=auth");
+    expect(setSetting).not.toHaveBeenCalled();
+  });
+
+  it("updatePrizeTexts writes all five prize-text keys (trimmed)", async () => {
+    await expect(
+      updatePrizeTextsAction(fd({ prize_text_daywinner: " Voucher €50 " })),
+    ).rejects.toThrow("REDIRECT:/beheer?saved=prizes");
+    expect(setSetting).toHaveBeenCalledTimes(5);
+    expect(setSetting).toHaveBeenCalledWith("prize_text_daywinner", "Voucher €50");
   });
 });

@@ -7,7 +7,13 @@ export type SettingKey =
   | "knockout_open"
   | "knockout_lock_utc"
   | "last_api_fetch_utc"
-  | "api_provider";
+  | "api_provider"
+  // Prijzenpoule prize texts (admin-editable; shown on /win).
+  | "prize_text_daywinner"
+  | "prize_text_luckyloser"
+  | "prize_text_first"
+  | "prize_text_second"
+  | "prize_text_third";
 
 export async function getSettings(): Promise<Record<string, string>> {
   const rows = await prisma.setting.findMany();

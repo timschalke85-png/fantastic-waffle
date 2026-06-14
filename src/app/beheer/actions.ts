@@ -231,3 +231,21 @@ export async function togglePollAction(formData: FormData): Promise<void> {
   revalidatePrijzenpoule();
   redirect("/beheer?saved=evening");
 }
+
+const PRIZE_TEXT_KEYS = [
+  "prize_text_daywinner",
+  "prize_text_luckyloser",
+  "prize_text_first",
+  "prize_text_second",
+  "prize_text_third",
+] as const;
+
+/** Edit the prijzenpoule prize texts (settings) — admin fills in the real prizes. */
+export async function updatePrizeTextsAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  for (const key of PRIZE_TEXT_KEYS) {
+    await setSetting(key, String(formData.get(key) ?? "").trim());
+  }
+  revalidatePrijzenpoule();
+  redirect("/beheer?saved=prizes");
+}
