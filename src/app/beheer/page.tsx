@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/admin-auth";
 import { getSettings } from "@/lib/settings";
+import { loadParticipantsAdmin } from "@/lib/participants-admin";
 import { fmtDateTimeAms, fmtRelativeNl } from "@/lib/format";
 import {
   loginAction,
@@ -21,12 +22,13 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   if (!(await isAdmin())) return <LoginView error={sp.error === "auth"} />;
 
-  const [settings, matches] = await Promise.all([
+  const [settings, matches, participants] = await Promise.all([
     getSettings(),
     prisma.match.findMany({
       include: { homeTeam: true, awayTeam: true },
       orderBy: [{ kickoffUtc: "asc" }],
     }),
+    loadParticipantsAdmin(),
   ]);
 
   // Knock-out readiness hints (informational only — no automatic action).
@@ -176,6 +178,47 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
             staan hierboven bij Instellingen.
           </span>
         </div>
+      </section>
+
+      {/* deelnemers */}
+      <section className="mb-8">
+        <h2 className="mb-3 font-semibold">Deelnemers ({participants.length})</h2>
+        {participants.length === 0 ? (
+          <p className="text-sm text-brand-ink/55">Nog geen deelnemers geregistreerd.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b text-left text-brand-ink/60">
+                  <th className="py-2 pr-2">#</th>
+                  <th className="py-2 pr-2">Bijnaam</th>
+                  <th className="py-2 pr-2">Geregistreerd</th>
+                  <th className="py-2 pr-2">Eerste inzending</th>
+                  <th className="py-2 pr-2 text-center">Voorspellingen</th>
+                  <th className="py-2 pr-2 text-right">Punten</th>
+                </tr>
+              </thead>
+              <tbody>
+                {participants.map((p) => (
+                  <tr key={p.id} className="border-b align-middle">
+                    <td className="py-1.5 pr-2 text-brand-ink/50">{p.rank ?? "—"}</td>
+                    <td className="py-1.5 pr-2 font-medium">{p.nickname}</td>
+                    <td className="whitespace-nowrap py-1.5 pr-2 text-brand-ink/60">
+                      {fmtDateTimeAms(p.createdAtIso)}
+                    </td>
+                    <td className="whitespace-nowrap py-1.5 pr-2 text-brand-ink/60">
+                      {p.firstSubmittedAtIso ? fmtDateTimeAms(p.firstSubmittedAtIso) : "—"}
+                    </td>
+                    <td className="py-1.5 pr-2 text-center tabular">
+                      {p.predictionCount > 0 ? p.predictionCount : <span className="text-brand-ink/40">geen</span>}
+                    </td>
+                    <td className="py-1.5 pr-2 text-right tabular font-semibold">{p.points ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {/* matches */}
