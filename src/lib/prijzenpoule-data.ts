@@ -3,6 +3,31 @@
 // module — reads Participant/Match but never the poule scoring.
 import "server-only";
 import { prisma } from "./db";
+import { getSettings } from "./settings";
+
+export interface PrizeTexts {
+  daywinner: string;
+  luckyLoser: string;
+  first: string;
+  second: string;
+  third: string;
+}
+
+const PRIZE_PLACEHOLDER = "Wordt nog bekendgemaakt";
+
+/** Editable prize texts from `settings`, with a friendly placeholder when unset.
+ *  Admin fills these in later (PRIJZENPOULE-PLAN.md §9) — never hard-coded. */
+export async function getPrizeTexts(): Promise<PrizeTexts> {
+  const s = await getSettings();
+  const pick = (key: string) => s[key]?.trim() || PRIZE_PLACEHOLDER;
+  return {
+    daywinner: pick("prize_text_daywinner"),
+    luckyLoser: pick("prize_text_luckyloser"),
+    first: pick("prize_text_first"),
+    second: pick("prize_text_second"),
+    third: pick("prize_text_third"),
+  };
+}
 
 /** The single active ("vanavond") evening, or null. */
 export async function getActiveEvening() {
