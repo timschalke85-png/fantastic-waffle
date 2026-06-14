@@ -56,7 +56,7 @@ export async function currentParticipant(): Promise<SessionParticipant | null> {
 
 export type AuthResult =
   | { ok: true; participant: SessionParticipant }
-  | { ok: false; error: "nickname" | "pin" | "wrong_pin" | "taken" };
+  | { ok: false; error: "nickname" | "pin" | "wrong_pin" | "taken" | "unknown" };
 
 export interface SignInInput {
   nickname: string;
@@ -111,6 +111,71 @@ export async function signInOrRegister(input: SignInInput): Promise<AuthResult> 
     }
     throw e;
   }
+}
+
+/**
+ * Register a NEW participant (Registreren tab). Rejects with "taken" if the
+ * bijnaam already exists (case-insensitive, trimmed) — even with the correct PIN:
+ * registering never logs into an existing account. Concurrency-safe: a duplicate
+ * insert (P2002) between the check and the create is also reported as "taken".
+ */
+export async function registerParticipant(input: SignInInput): Promise<AuthResult> {
+  const nickname = input.nickname.trim();
+  if (!isValidNickname(nickname)) return { ok: false, error: "nickname" };
+  if (!isValidPin(input.pin)) return { ok: false, error: "pin" };
+
+  const key = nicknameKey(nickname);
+  const existing = await prisma.participant.findUnique({ where: { nicknameKey: key } });
+  if (existing) return { ok: false, error: "taken" };
+
+  const pinHash = await bcrypt.hash(input.pin, 10);
+  try {
+    const created = await prisma.participant.create({
+      data: {
+        nickname,
+        nicknameKey: key,
+        fullName: input.fullName?.trim() || null,
+        showFullName: !!input.showFullName,
+        pinHash,
+      },
+    });
+    await setSession(created);
+    return {
+      ok: true,
+      participant: { id: created.id, nickname: created.nickname, fullName: created.fullName, showFullName: created.showFullName },
+    };
+  } catch (e: unknown) {
+    if (typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === "P2002") {
+      return { ok: false, error: "taken" };
+    }
+    throw e;
+  }
+}
+
+/**
+ * Sign in to an EXISTING participant (Inloggen tab). NEVER creates an account: an
+ * unknown bijnaam returns "unknown", a wrong PIN returns "wrong_pin". This mirrors
+ * the existing-account branch of the old signInOrRegister exactly (same
+ * nicknameKey lookup + bcrypt.compare), so already-registered participants on the
+ * live database keep logging in with the same bijnaam + PIN, unchanged.
+ */
+export async function signInParticipant(input: SignInInput): Promise<AuthResult> {
+  const nickname = input.nickname.trim();
+  if (!isValidNickname(nickname)) return { ok: false, error: "nickname" };
+  if (!isValidPin(input.pin)) return { ok: false, error: "pin" };
+
+  const key = nicknameKey(nickname);
+  const existing = await prisma.participant.findUnique({ where: { nicknameKey: key } });
+  if (!existing) return { ok: false, error: "unknown" };
+
+  const match = await bcrypt.compare(input.pin, existing.pinHash);
+  if (!match) return { ok: false, error: "wrong_pin" };
+
+  await setSession(existing);
+  return {
+    ok: true,
+    participant: { id: existing.id, nickname: existing.nickname, fullName: existing.fullName, showFullName: existing.showFullName },
+  };
 }
 
 export async function updateProfile(
