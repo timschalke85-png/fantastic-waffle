@@ -174,7 +174,13 @@ function MatchesSection({
 
   const dep = JSON.stringify(scores);
   const status = useAutosave(dep, () =>
-    saveGroupMatchesAction(group.matches.map((m) => ({ matchId: m.id, home: scores[m.id]?.home ?? "", away: scores[m.id]?.away ?? "" }))),
+    // Only send still-editable matches; a kicked-off match is read-only here and
+    // the server would reject it (match_locked) anyway.
+    saveGroupMatchesAction(
+      group.matches
+        .filter((m) => !m.locked)
+        .map((m) => ({ matchId: m.id, home: scores[m.id]?.home ?? "", away: scores[m.id]?.away ?? "" })),
+    ),
   );
 
   const set = (id: string, side: "home" | "away", v: string) =>
@@ -193,6 +199,21 @@ function MatchesSection({
       <ul className="space-y-2">
         {group.matches.map((m) => {
           const s = scores[m.id] ?? { home: "", away: "" };
+          if (m.locked) {
+            // Kicked-off (or past the deadline): read-only, shows the saved pick.
+            return (
+              <li key={m.id} className="text-sm opacity-70" data-prefix={idPrefix}>
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 truncate text-right">{m.homeName}</span>
+                  <span className="w-10 text-center tabular font-semibold">{s.home !== "" ? s.home : "–"}</span>
+                  <span className="text-brand-ink/40">–</span>
+                  <span className="w-10 text-center tabular font-semibold">{s.away !== "" ? s.away : "–"}</span>
+                  <span className="flex-1 truncate">{m.awayName}</span>
+                </div>
+                <p className="mt-0.5 text-center text-[10px] text-brand-ink/40">op slot — wedstrijd begonnen</p>
+              </li>
+            );
+          }
           return (
             <li key={m.id} className="text-sm" data-prefix={idPrefix}>
               <div className="flex items-center gap-2">
