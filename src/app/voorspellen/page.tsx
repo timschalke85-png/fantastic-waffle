@@ -52,7 +52,10 @@ async function Loaded({
   return (
     <>
       {!data.locked && (
-        <section className="mb-4 rounded-xl border-[5px] border-brand-accent/40 bg-brand-accent/10 p-4">
+        <section
+          className="mb-4 rounded-xl border-solid border-brand-accent/40 bg-brand-accent/10 p-4"
+          style={{ borderWidth: "5px" }}
+        >
           <h2 className="text-sm font-bold text-brand-accent">Zo verdien je punten</h2>
           <ul className="mt-1.5 space-y-1 text-[12px] leading-snug text-brand-ink/80">
             <li>
