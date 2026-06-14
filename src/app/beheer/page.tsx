@@ -8,6 +8,7 @@ import {
   updateMatchAction,
   clearOverrideAction,
   updateSettingsAction,
+  setKnockoutLockFromR32Action,
   forceRefreshAction,
   recomputeAction,
 } from "./actions";
@@ -27,6 +28,14 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
       orderBy: [{ kickoffUtc: "asc" }],
     }),
   ]);
+
+  // Knock-out readiness hints (informational only — no automatic action).
+  const groupMatches = matches.filter((m) => m.stage === "GROUP");
+  const groupFinished = groupMatches.filter((m) => m.status === "FINISHED").length;
+  const allGroupsDone = groupMatches.length > 0 && groupFinished === groupMatches.length;
+  const r32Matches = matches.filter((m) => m.stage === "R32");
+  const r32Known = r32Matches.filter((m) => m.homeTeamId && m.awayTeamId).length;
+  const r32Complete = r32Known === 16;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
@@ -49,6 +58,10 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         </Banner>
       )}
       {sp.saved === "settings" && <Banner>Instellingen opgeslagen.</Banner>}
+      {sp.saved === "ko_lock" && <Banner>Knock-out lock gezet op de vroegste R32-aftrap.</Banner>}
+      {sp.error === "no_r32" && (
+        <Banner>Nog geen R32-wedstrijden in de data — knock-out lock niet gezet.</Banner>
+      )}
       {sp.recompute === "noop" && (
         <Banner>Herbereken klassement: nog niet actief (komt in Fase 7).</Banner>
       )}
@@ -105,6 +118,48 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
             </button>
           </div>
         </form>
+      </section>
+
+      {/* knock-out beheer */}
+      <section className="mb-8 rounded border p-4">
+        <h2 className="mb-3 font-semibold">Knock-out voorspelronde</h2>
+
+        <div className="mb-3 grid gap-1.5 text-sm">
+          <p className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                allGroupsDone ? "bg-green-100 text-green-800" : "bg-brand-ink/5 text-brand-ink/60"
+              }`}
+            >
+              {groupFinished}/{groupMatches.length}
+            </span>
+            Groepswedstrijden afgelopen
+            {allGroupsDone && <span className="text-green-700">— je kunt de knock-out openen</span>}
+          </p>
+          <p className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                r32Complete ? "bg-green-100 text-green-800" : "bg-brand-ink/5 text-brand-ink/60"
+              }`}
+            >
+              {r32Known}/16
+            </span>
+            R32-tegenstanders bekend
+            {r32Complete && <span className="text-green-700">— bracket is compleet</span>}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <form action={setKnockoutLockFromR32Action}>
+            <button className="rounded border px-3 py-2 text-sm">
+              Stel lock = vroegste R32-aftrap
+            </button>
+          </form>
+          <span className="text-xs text-brand-ink/55">
+            Vult <code>knockout_lock_utc</code> uit de data; de handmatige override + open-schakelaar
+            staan hierboven bij Instellingen.
+          </span>
+        </div>
       </section>
 
       {/* matches */}

@@ -88,6 +88,22 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
   redirect("/beheer?saved=settings");
 }
 
+/** Q5: derive knockout_lock_utc from the data = the earliest R32 kickoff. The
+ *  manual override input (in the Instellingen form) is kept; this just fills it
+ *  in from the real schedule. No-op with a notice if no R32 matches exist yet. */
+export async function setKnockoutLockFromR32Action(): Promise<void> {
+  await requireAdmin();
+  const earliest = await prisma.match.findFirst({
+    where: { stage: "R32" },
+    orderBy: { kickoffUtc: "asc" },
+    select: { kickoffUtc: true },
+  });
+  if (!earliest) redirect("/beheer?error=no_r32");
+  await setSetting("knockout_lock_utc", earliest.kickoffUtc.toISOString());
+  revalidatePath("/beheer");
+  redirect("/beheer?saved=ko_lock");
+}
+
 export async function forceRefreshAction(): Promise<void> {
   await requireAdmin();
   const r = await refreshMatchData({ force: true });
