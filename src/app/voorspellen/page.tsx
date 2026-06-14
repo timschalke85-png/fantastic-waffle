@@ -52,9 +52,9 @@ async function Loaded({
   return (
     <>
       {!data.locked && (
-        <section className="mb-4 rounded-xl border border-brand-ink/15 bg-brand-ink/[0.02] p-4">
-          <h2 className="text-sm font-semibold">Zo verdien je punten</h2>
-          <ul className="mt-1.5 space-y-1 text-[12px] leading-snug text-brand-ink/70">
+        <section className="mb-4 rounded-xl border-2 border-brand-accent/40 bg-brand-accent/10 p-4">
+          <h2 className="text-sm font-bold text-brand-accent">Zo verdien je punten</h2>
+          <ul className="mt-1.5 space-y-1 text-[12px] leading-snug text-brand-ink/80">
             <li>
               <strong>Vul álle poules in</strong>, niet alleen die van Oranje — elke poule levert punten op.
               Poule F telt wel dubbel, want dat is dé groep van dit toernooi.
