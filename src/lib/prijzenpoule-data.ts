@@ -58,6 +58,7 @@ export interface DailyPredictionValues {
 export interface WinData {
   evening: { id: string; label: string; pollOpen: boolean; hasCode: boolean } | null;
   checkedIn: boolean;
+  checkedInNames: string[]; // bijnamen of everyone checked in tonight (public, social)
   dagspellen: WinDagspel[];
   existing: Record<string, DailyPredictionValues>; // eveningMatchId -> saved prediction
 }
@@ -65,9 +66,9 @@ export interface WinData {
 /** Everything /win needs for the active evening + this participant. */
 export async function loadWinData(participantId: string): Promise<WinData> {
   const evening = await getActiveEvening();
-  if (!evening) return { evening: null, checkedIn: false, dagspellen: [], existing: {} };
+  if (!evening) return { evening: null, checkedIn: false, checkedInNames: [], dagspellen: [], existing: {} };
 
-  const [checkin, eveningMatches, preds] = await Promise.all([
+  const [checkin, eveningMatches, preds, allCheckins] = await Promise.all([
     prisma.checkin.findUnique({
       where: { eveningId_participantId: { eveningId: evening.id, participantId } },
       select: { id: true },
@@ -86,6 +87,11 @@ export async function loadWinData(participantId: string): Promise<WinData> {
         secondHalfHome: true,
         secondHalfAway: true,
       },
+    }),
+    prisma.checkin.findMany({
+      where: { eveningId: evening.id },
+      orderBy: { createdAt: "asc" },
+      select: { participant: { select: { nickname: true } } },
     }),
   ]);
 
@@ -118,6 +124,7 @@ export async function loadWinData(participantId: string): Promise<WinData> {
   return {
     evening: { id: evening.id, label: evening.label, pollOpen: evening.pollOpen, hasCode: !!evening.checkInCode },
     checkedIn: !!checkin,
+    checkedInNames: allCheckins.map((c) => c.participant.nickname),
     dagspellen,
     existing,
   };
@@ -131,6 +138,7 @@ export interface AdminEveningRow {
   pollOpen: boolean;
   createdAtIso: string;
   checkinCount: number;
+  checkinNames: string[]; // bijnamen of who checked in (admin view)
   dagspellen: { eveningMatchId: string; ordinal: number; matchId: string; label: string }[];
 }
 
@@ -140,6 +148,10 @@ export async function loadEveningsAdmin(): Promise<AdminEveningRow[]> {
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { checkins: true } },
+      checkins: {
+        orderBy: { createdAt: "asc" },
+        select: { participant: { select: { nickname: true } } },
+      },
       matches: {
         orderBy: { ordinal: "asc" },
         include: { match: { include: { homeTeam: true, awayTeam: true } } },
@@ -155,6 +167,7 @@ export async function loadEveningsAdmin(): Promise<AdminEveningRow[]> {
     pollOpen: e.pollOpen,
     createdAtIso: e.createdAt.toISOString(),
     checkinCount: e._count.checkins,
+    checkinNames: e.checkins.map((c) => c.participant.nickname),
     dagspellen: e.matches.map((em) => ({
       eveningMatchId: em.id,
       ordinal: em.ordinal,
