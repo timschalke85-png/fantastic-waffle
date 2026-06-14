@@ -5,8 +5,8 @@
 // for every group regardless, since no final standing is known at lock time.
 import "server-only";
 import { prisma } from "./db";
-import { getGroupLockUtc } from "./settings";
-import { isEligibleMatch } from "./predictions-validate";
+import { getGroupLockUtc, getGroupEligibilityFloorUtc } from "./settings";
+import { isEligibleMatch, isMatchEditable } from "./predictions-validate";
 
 export interface FormTeam {
   id: string;
@@ -24,6 +24,7 @@ export interface FormMatch {
   homeCode: string;
   awayCode: string;
   kickoffIso: string;
+  locked: boolean; // per-match input lock: kickoff passed OR global deadline passed
 }
 
 export interface FormGroup {
@@ -48,20 +49,22 @@ export interface PredictionFormData {
 
 const GROUP_LETTERS = "ABCDEFGHIJKL".split("");
 
-/** Eligible group match ids (kickoff >= lock). Shared by the loader and the save
- *  actions so the UI and the server agree on what is writable. */
+/** Eligible (scoreable) group match ids: kickoff >= the eligibility floor. Shared
+ *  by the loader, the save action and scoring so they agree on the pool's scope.
+ *  Throws if the floor is unset (hard-fail by design). */
 export async function eligibleGroupMatchIds(): Promise<Set<string>> {
-  const lock = await getGroupLockUtc();
-  if (!lock) return new Set();
+  const floor = await getGroupEligibilityFloorUtc();
   const matches = await prisma.match.findMany({
     where: { stage: "GROUP" },
     select: { id: true, kickoffUtc: true },
   });
-  return new Set(matches.filter((m) => isEligibleMatch(m.kickoffUtc, lock)).map((m) => m.id));
+  return new Set(matches.filter((m) => isEligibleMatch(m.kickoffUtc, floor)).map((m) => m.id));
 }
 
 export async function loadPredictionForm(participantId: string): Promise<PredictionFormData> {
-  const lock = await getGroupLockUtc();
+  // lock = global input deadline (group_lock_utc); floor = scoring-eligibility
+  // anchor (group_eligibility_floor_utc). Decoupled on purpose. Floor throws if unset.
+  const [lock, floor] = await Promise.all([getGroupLockUtc(), getGroupEligibilityFloorUtc()]);
   const now = Date.now();
   const locked = lock != null && now >= lock.getTime();
 
@@ -94,7 +97,7 @@ export async function loadPredictionForm(participantId: string): Promise<Predict
     teamsByGroup.set(t.groupLetter, list);
   }
 
-  const eligible = lock ? matchesRaw.filter((m) => isEligibleMatch(m.kickoffUtc, lock)) : [];
+  const eligible = matchesRaw.filter((m) => isEligibleMatch(m.kickoffUtc, floor));
   const matchesByGroup = new Map<string, FormMatch[]>();
   for (const m of eligible) {
     if (!m.groupLetter) continue;
@@ -112,6 +115,7 @@ export async function loadPredictionForm(participantId: string): Promise<Predict
       homeCode: home.fifaCode,
       awayCode: away.fifaCode,
       kickoffIso: m.kickoffUtc.toISOString(),
+      locked: !isMatchEditable(m.kickoffUtc, now, lock),
     });
     matchesByGroup.set(m.groupLetter, list);
   }
