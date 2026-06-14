@@ -6,6 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { currentParticipant } from "@/lib/participant-auth";
+import { parseGoals, isMatchEditable } from "@/lib/predictions-validate";
 
 export type CheckInResult =
   | { ok: true; already: boolean }
@@ -43,4 +44,66 @@ export async function checkInAction(formData: FormData): Promise<CheckInResult> 
   }
   revalidatePath("/win");
   return { ok: true, already: false };
+}
+
+// --- Dagvoorspelling (doelpunten per team per helft) -----------------------
+
+export type DailySaveResult =
+  | { ok: true }
+  | { ok: false; error: "auth" | "not_found" | "not_checked_in" | "locked" | "invalid" };
+
+export interface DailyPredictionInput {
+  eveningMatchId: string;
+  firstHalfHome: string;
+  firstHalfAway: string;
+  secondHalfHome: string;
+  secondHalfAway: string;
+}
+
+const MAX_HALF_GOALS = 20; // ruim boven elke realistische helft
+
+/** All four numbers required, non-negative integer, within a sane cap. */
+function parseHalfGoals(raw: string): number | null {
+  const g = parseGoals(raw);
+  if (g.kind !== "value" || g.value > MAX_HALF_GOALS) return null;
+  return g.value;
+}
+
+/**
+ * Save (upsert) a participant's day-game prediction for one dagspel. Server-side:
+ * must be signed in, CHECKED IN for that dagspel's evening (O8), and BEFORE the
+ * match kickoff (per-match lock). Re-submitting before kickoff overwrites the
+ * existing prediction (upsert on eveningMatchId+participantId).
+ */
+export async function saveDailyPredictionAction(input: DailyPredictionInput): Promise<DailySaveResult> {
+  const p = await currentParticipant();
+  if (!p) return { ok: false, error: "auth" };
+
+  const em = await prisma.eveningMatch.findUnique({
+    where: { id: input.eveningMatchId },
+    include: { match: { select: { kickoffUtc: true } } },
+  });
+  if (!em) return { ok: false, error: "not_found" };
+
+  const checkin = await prisma.checkin.findUnique({
+    where: { eveningId_participantId: { eveningId: em.eveningId, participantId: p.id } },
+    select: { id: true },
+  });
+  if (!checkin) return { ok: false, error: "not_checked_in" };
+
+  if (!isMatchEditable(em.match.kickoffUtc, Date.now(), null)) return { ok: false, error: "locked" };
+
+  const fhh = parseHalfGoals(input.firstHalfHome);
+  const fha = parseHalfGoals(input.firstHalfAway);
+  const shh = parseHalfGoals(input.secondHalfHome);
+  const sha = parseHalfGoals(input.secondHalfAway);
+  if (fhh === null || fha === null || shh === null || sha === null) return { ok: false, error: "invalid" };
+
+  await prisma.dailyPrediction.upsert({
+    where: { eveningMatchId_participantId: { eveningMatchId: em.id, participantId: p.id } },
+    create: { eveningMatchId: em.id, participantId: p.id, firstHalfHome: fhh, firstHalfAway: fha, secondHalfHome: shh, secondHalfAway: sha },
+    update: { firstHalfHome: fhh, firstHalfAway: fha, secondHalfHome: shh, secondHalfAway: sha },
+  });
+  revalidatePath("/win");
+  return { ok: true };
 }
