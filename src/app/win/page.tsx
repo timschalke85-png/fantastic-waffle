@@ -4,7 +4,16 @@
 // elk onderdeel (PRIJZENPOULE-PLAN.md §10).
 import Link from "next/link";
 import { currentParticipant } from "@/lib/participant-auth";
-import { loadWinData, getPrizeTexts, type WinData, type PrizeTexts } from "@/lib/prijzenpoule-data";
+import {
+  loadWinData,
+  getPrizeTexts,
+  loadWinnersOverview,
+  loadHoofdprijzen,
+  type WinData,
+  type PrizeTexts,
+  type FrozenEveningWinners,
+  type HoofdprijzenData,
+} from "@/lib/prijzenpoule-data";
 import { DAILY_SCORING } from "@/config/prize-scoring";
 import { CheckInForm } from "@/components/win/CheckInForm";
 import { DailyPredictionForm } from "@/components/win/DailyPredictionForm";
@@ -43,20 +52,34 @@ function NotSignedIn() {
 }
 
 async function Loaded({ participantId }: { participantId: string }) {
-  const [data, prizes] = await Promise.all([loadWinData(participantId), getPrizeTexts()]);
+  const [data, prizes, winners, hoofdprijzen] = await Promise.all([
+    loadWinData(participantId),
+    getPrizeTexts(),
+    loadWinnersOverview(),
+    loadHoofdprijzen(),
+  ]);
 
-  if (!data.evening) {
-    return (
-      <div className="rounded-xl border border-dashed border-brand-ink/20 p-6 text-center">
-        <p className="text-sm font-medium">Vanavond is er niets te winnen</p>
-        <p className="mt-1 text-[12px] text-brand-ink/55">
-          Op wedstrijdavonden bij Van Saaze kun je hier inchecken en meespelen. Hou deze pagina in de gaten!
-        </p>
-      </div>
-    );
-  }
+  return (
+    <>
+      {data.evening ? <TonightBlock data={data} prizes={prizes} /> : <NoEvening />}
+      <WinnersSection winners={winners} hoofdprijzen={hoofdprijzen} prizes={prizes} />
+    </>
+  );
+}
 
-  const evening = data.evening;
+function NoEvening() {
+  return (
+    <div className="rounded-xl border border-dashed border-brand-ink/20 p-6 text-center">
+      <p className="text-sm font-medium">Vanavond is er niets te winnen</p>
+      <p className="mt-1 text-[12px] text-brand-ink/55">
+        Op wedstrijdavonden bij Van Saaze kun je hier inchecken en meespelen. Hou deze pagina in de gaten!
+      </p>
+    </div>
+  );
+}
+
+function TonightBlock({ data, prizes }: { data: WinData; prizes: PrizeTexts }) {
+  const evening = data.evening!;
   return (
     <>
       <p className="mb-4 rounded-lg bg-wk-field/10 px-3 py-2 text-[12px] text-brand-ink/75">
@@ -65,6 +88,85 @@ async function Loaded({ participantId }: { participantId: string }) {
       {!data.checkedIn ? <CheckInBlock prizes={prizes} /> : <CheckedInBlock data={data} prizes={prizes} />}
       <AttendeesBlock names={data.checkedInNames} />
     </>
+  );
+}
+
+function WinnersSection({
+  winners,
+  hoofdprijzen,
+  prizes,
+}: {
+  winners: FrozenEveningWinners[];
+  hoofdprijzen: HoofdprijzenData;
+  prizes: PrizeTexts;
+}) {
+  return (
+    <section className="mt-8">
+      <h2 className="mb-1 text-lg font-extrabold">Winnaars</h2>
+      <p className="mb-3 text-[12px] text-brand-ink/55">
+        Per afgesloten avond: de dagwinnaar (beste voorspelling) en de Lucky Loser (verloot onder alle
+        aanwezigen).
+      </p>
+
+      {winners.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-brand-ink/20 p-4 text-center text-[12px] text-brand-ink/55">
+          Nog geen afgesloten avonden. Na elke avond verschijnen hier de winnaars.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {winners.map((w) => (
+            <li key={w.id} className="rounded-xl border border-brand-ink/15 bg-white p-3">
+              <p className="text-sm font-semibold">{w.label}</p>
+              <ul className="mt-1 space-y-0.5 text-[12px]">
+                {w.dagspellen.map((d, i) => (
+                  <li key={i}>
+                    <span className="text-brand-ink/55">{d.matchLabel}:</span>{" "}
+                    {d.winnerNames.length ? (
+                      <strong>
+                        {d.winnerNames.join(", ")}
+                        {d.winnerNames.length > 1 ? ` (gedeeld door ${d.winnerNames.length})` : ""}
+                      </strong>
+                    ) : (
+                      <span className="text-brand-ink/45">geen dagwinnaar</span>
+                    )}{" "}
+                    <span className="text-brand-ink/45">— {prizes.daywinner}</span>
+                  </li>
+                ))}
+                <li>
+                  <span className="text-brand-ink/55">Lucky Loser:</span>{" "}
+                  <strong>{w.luckyLoserName ?? "—"}</strong>{" "}
+                  <span className="text-brand-ink/45">— {prizes.luckyLoser}</span>
+                </li>
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Hoofdprijzen eindblok */}
+      <div className="mt-4 rounded-xl border-2 border-brand-accent/40 bg-brand-accent/10 p-4">
+        <h3 className="text-sm font-bold text-brand-accent">Hoofdprijzen (eindklassement)</h3>
+        <p className="mt-1 text-[12px] leading-snug text-brand-ink/80">
+          Aan het eind van het toernooi gaan de hoofdprijzen naar de hoogst geëindigde deelnemers in het
+          klassement die <strong>minimaal {hoofdprijzen.minEvenings} avonden</strong> aanwezig waren. Dit is
+          pas definitief na de laatste wedstrijd.
+        </p>
+        <ol className="mt-2 space-y-1 text-sm">
+          {[prizes.first, prizes.second, prizes.third].map((prijs, i) => {
+            const w = hoofdprijzen.winners.find((x) => x.rank === i + 1);
+            return (
+              <li key={i} className="flex items-center gap-2">
+                <span className="w-5 text-center font-extrabold tabular text-brand-ink/50">{i + 1}</span>
+                <span className="flex-1 font-bold">
+                  {w ? w.nickname : <span className="font-normal text-brand-ink/40">nog niet bepaald</span>}
+                </span>
+                <span className="text-[12px] text-brand-ink/60">{prijs}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </section>
   );
 }
 
