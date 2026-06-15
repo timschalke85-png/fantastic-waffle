@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const { prisma, isAdmin, redirect, setSetting, loadEveningForFreeze } = vi.hoisted(() => ({
   prisma: {
     participant: { findUnique: vi.fn(), delete: vi.fn() },
+    match: { update: vi.fn() },
     evening: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     eveningMatch: { deleteMany: vi.fn(), create: vi.fn() },
     dailyWinner: { createMany: vi.fn() },
@@ -30,6 +31,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import {
   deleteParticipantAction,
+  updateMatchAction,
   createEveningAction,
   activateEveningAction,
   setEveningMatchesAction,
@@ -76,6 +78,32 @@ describe("deleteParticipantAction", () => {
     await expect(deleteParticipantAction(fd({}))).rejects.toThrow("REDIRECT:/beheer?error=participant");
     expect(prisma.participant.findUnique).not.toHaveBeenCalled();
     expect(prisma.participant.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateMatchAction (ruststand)", () => {
+  beforeEach(() => isAdmin.mockResolvedValue(true));
+
+  it("rejects an impossible ruststand (more at half time than at full time)", async () => {
+    await expect(
+      updateMatchAction(fd({ matchId: "m1", status: "FINISHED", homeScore: "1", awayScore: "0", halfTimeHome: "2", halfTimeAway: "0" })),
+    ).rejects.toThrow("REDIRECT:/beheer?error=ruststand");
+    expect(prisma.match.update).not.toHaveBeenCalled();
+  });
+
+  it("saves a valid ruststand within the final score (flags manuallyOverridden)", async () => {
+    await updateMatchAction(fd({ matchId: "m1", status: "FINISHED", homeScore: "2", awayScore: "1", halfTimeHome: "1", halfTimeAway: "0" }));
+    expect(prisma.match.update).toHaveBeenCalledTimes(1);
+    const call = prisma.match.update.mock.calls[0][0];
+    expect(call.where).toEqual({ id: "m1" });
+    expect(call.data).toMatchObject({
+      status: "FINISHED",
+      homeScore: 2,
+      awayScore: 1,
+      halfTimeHome: 1,
+      halfTimeAway: 0,
+      manuallyOverridden: true,
+    });
   });
 });
 

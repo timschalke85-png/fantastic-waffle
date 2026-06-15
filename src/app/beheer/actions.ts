@@ -39,12 +39,28 @@ export async function updateMatchAction(formData: FormData): Promise<void> {
   const id = String(formData.get("matchId"));
   const status = String(formData.get("status")) as MatchStatus;
   if (!["SCHEDULED", "LIVE", "FINISHED"].includes(status)) redirect("/beheer?error=status");
+
+  const homeScore = parseScore(formData.get("homeScore"));
+  const awayScore = parseScore(formData.get("awayScore"));
+  const halfTimeHome = parseScore(formData.get("halfTimeHome"));
+  const halfTimeAway = parseScore(formData.get("halfTimeAway"));
+  // A team can't have fewer goals at full time than at half time. Only check when
+  // both are present (a LIVE match may have a ruststand but no final score yet).
+  if (
+    (halfTimeHome != null && homeScore != null && halfTimeHome > homeScore) ||
+    (halfTimeAway != null && awayScore != null && halfTimeAway > awayScore)
+  ) {
+    redirect("/beheer?error=ruststand");
+  }
+
   await prisma.match.update({
     where: { id },
     data: {
       status,
-      homeScore: parseScore(formData.get("homeScore")),
-      awayScore: parseScore(formData.get("awayScore")),
+      homeScore,
+      awayScore,
+      halfTimeHome,
+      halfTimeAway,
       manuallyOverridden: true,
     },
   });

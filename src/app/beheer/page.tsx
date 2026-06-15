@@ -99,6 +99,9 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
       {sp.error === "evening_label" && <Banner>Geef de avond een label.</Banner>}
       {sp.error === "evening_matches" && <Banner>Kies 1 of 2 wedstrijden voor de avond.</Banner>}
       {sp.saved === "frozen" && <Banner>Avond afgesloten — winnaars vastgelegd.</Banner>}
+      {sp.error === "ruststand" && (
+        <Banner>Onmogelijke ruststand: een team kan bij rust niet meer goals hebben dan aan het eind.</Banner>
+      )}
       {sp.error === "not_finished" && (
         <Banner>Afsluiten kan pas als de uitgezonden wedstrijd(en) afgelopen (FINISHED) zijn.</Banner>
       )}
@@ -421,6 +424,26 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
                           className="w-12 rounded border px-1.5 py-1 text-center"
                           aria-label="Score uit"
                         />
+                        {(m.status === "LIVE" || m.status === "FINISHED") && (
+                          <span className="ml-1 flex items-center gap-1 text-[11px] text-brand-ink/55">
+                            rust
+                            <input
+                              name="halfTimeHome"
+                              inputMode="numeric"
+                              defaultValue={m.halfTimeHome ?? ""}
+                              className="w-10 rounded border px-1.5 py-1 text-center"
+                              aria-label="Ruststand thuis"
+                            />
+                            <span>–</span>
+                            <input
+                              name="halfTimeAway"
+                              inputMode="numeric"
+                              defaultValue={m.halfTimeAway ?? ""}
+                              className="w-10 rounded border px-1.5 py-1 text-center"
+                              aria-label="Ruststand uit"
+                            />
+                          </span>
+                        )}
                         <button className="rounded bg-brand-ink px-2.5 py-1 text-xs font-medium text-white">
                           Opslaan
                         </button>
