@@ -13,7 +13,8 @@ export type SettingKey =
   | "prize_text_luckyloser"
   | "prize_text_first"
   | "prize_text_second"
-  | "prize_text_third";
+  | "prize_text_third"
+  | "prize_min_evenings";
 
 export async function getSettings(): Promise<Record<string, string>> {
   const rows = await prisma.setting.findMany();

@@ -3,15 +3,17 @@
 // redirect() throws in real Next, so the mock throws too and we assert on that.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { prisma, isAdmin, redirect, setSetting } = vi.hoisted(() => ({
+const { prisma, isAdmin, redirect, setSetting, loadEveningForFreeze } = vi.hoisted(() => ({
   prisma: {
     participant: { findUnique: vi.fn(), delete: vi.fn() },
     evening: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     eveningMatch: { deleteMany: vi.fn(), create: vi.fn() },
+    dailyWinner: { createMany: vi.fn() },
     $transaction: vi.fn(async (ops: unknown[]) => ops),
   },
   isAdmin: vi.fn(),
   setSetting: vi.fn(),
+  loadEveningForFreeze: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
   }),
@@ -20,6 +22,7 @@ const { prisma, isAdmin, redirect, setSetting } = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({ prisma }));
 vi.mock("@/lib/admin-auth", () => ({ isAdmin, signIn: vi.fn(), signOut: vi.fn() }));
 vi.mock("@/lib/settings", () => ({ setSetting }));
+vi.mock("@/lib/prijzenpoule-data", () => ({ loadEveningForFreeze }));
 vi.mock("@/lib/refresh", () => ({ refreshMatchData: vi.fn() }));
 vi.mock("@/lib/recompute", () => ({ recomputeScores: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect }));
@@ -32,6 +35,7 @@ import {
   setEveningMatchesAction,
   togglePollAction,
   updatePrizeTextsAction,
+  freezeEveningAction,
 } from "../src/app/beheer/actions";
 
 const fd = (obj: Record<string, string>) => {
@@ -141,11 +145,72 @@ describe("prijzenpoule avond-beheer", () => {
     expect(setSetting).not.toHaveBeenCalled();
   });
 
-  it("updatePrizeTexts writes all five prize-text keys (trimmed)", async () => {
+  it("updatePrizeTexts writes the five prize-text keys (trimmed) + the min-evenings setting", async () => {
     await expect(
-      updatePrizeTextsAction(fd({ prize_text_daywinner: " Voucher €50 " })),
+      updatePrizeTextsAction(fd({ prize_text_daywinner: " Voucher €50 ", prize_min_evenings: "4" })),
     ).rejects.toThrow("REDIRECT:/beheer?saved=prizes");
-    expect(setSetting).toHaveBeenCalledTimes(5);
     expect(setSetting).toHaveBeenCalledWith("prize_text_daywinner", "Voucher €50");
+    expect(setSetting).toHaveBeenCalledWith("prize_min_evenings", "4");
+  });
+});
+
+describe("freezeEveningAction", () => {
+  beforeEach(() => isAdmin.mockResolvedValue(true));
+
+  const finished = (over: Record<string, unknown> = {}) => ({
+    eveningId: "e1",
+    label: "Avond 1",
+    frozen: false,
+    hasMatches: true,
+    allFinished: true,
+    resultKey: "em1=2-1",
+    checkedInIds: ["a", "b", "c"],
+    matches: [
+      {
+        eveningMatchId: "em1",
+        actual: { halfTimeHome: 1, halfTimeAway: 0, fullTimeHome: 2, fullTimeAway: 1 },
+        entries: [
+          { participantId: "a", pred: { firstHalfHome: 1, firstHalfAway: 0, secondHalfHome: 1, secondHalfAway: 1 } }, // 9
+          { participantId: "b", pred: { firstHalfHome: 0, firstHalfAway: 0, secondHalfHome: 0, secondHalfAway: 0 } }, // 1
+        ],
+      },
+    ],
+    matchLabels: {},
+    nameOf: {},
+    ...over,
+  });
+
+  it("rejects a non-admin and stores nothing", async () => {
+    isAdmin.mockResolvedValue(false);
+    await expect(freezeEveningAction(fd({ eveningId: "e1" }))).rejects.toThrow("REDIRECT:/beheer?error=auth");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the evening is not found", async () => {
+    loadEveningForFreeze.mockResolvedValue(null);
+    await expect(freezeEveningAction(fd({ eveningId: "x" }))).rejects.toThrow("REDIRECT:/beheer?error=evening");
+  });
+
+  it("is idempotent: an already-frozen evening is a no-op (no store)", async () => {
+    loadEveningForFreeze.mockResolvedValue(finished({ frozen: true }));
+    await expect(freezeEveningAction(fd({ eveningId: "e1" }))).rejects.toThrow("REDIRECT:/beheer?saved=frozen");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects when not all matches are FINISHED", async () => {
+    loadEveningForFreeze.mockResolvedValue(finished({ allFinished: false }));
+    await expect(freezeEveningAction(fd({ eveningId: "e1" }))).rejects.toThrow("REDIRECT:/beheer?error=not_finished");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("freezes: stores the dagwinnaar rows + a lucky loser (excl. dagwinnaars) and redirects", async () => {
+    loadEveningForFreeze.mockResolvedValue(finished());
+    await expect(freezeEveningAction(fd({ eveningId: "e1" }))).rejects.toThrow("REDIRECT:/beheer?saved=frozen");
+    expect(prisma.dailyWinner.createMany).toHaveBeenCalledWith({ data: [{ eveningMatchId: "em1", participantId: "a" }] });
+    const upd = prisma.evening.update.mock.calls[0][0];
+    expect(upd.where).toEqual({ id: "e1" });
+    expect(["b", "c"]).toContain(upd.data.luckyLoserId); // dagwinnaar "a" excluded
+    expect(upd.data.winnersFrozenAt).toBeInstanceOf(Date);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });

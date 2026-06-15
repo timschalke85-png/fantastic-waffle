@@ -2,7 +2,12 @@ import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/admin-auth";
 import { getSettings } from "@/lib/settings";
 import { loadParticipantsAdmin } from "@/lib/participants-admin";
-import { loadEveningsAdmin, type AdminEveningRow } from "@/lib/prijzenpoule-data";
+import {
+  loadEveningsAdmin,
+  loadEveningWinnersPreview,
+  type AdminEveningRow,
+  type EveningWinnersPreview,
+} from "@/lib/prijzenpoule-data";
 import { fmtDateTimeAms, fmtRelativeNl } from "@/lib/format";
 import {
   loginAction,
@@ -21,6 +26,7 @@ import {
   setEveningMatchesAction,
   togglePollAction,
   updatePrizeTextsAction,
+  freezeEveningAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +46,12 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
     loadParticipantsAdmin(),
     loadEveningsAdmin(),
   ]);
+
+  // Live winner previews per evening (for the freeze section).
+  const previewEntries = await Promise.all(
+    evenings.map(async (e) => [e.id, await loadEveningWinnersPreview(e.id)] as const),
+  );
+  const previews: Record<string, EveningWinnersPreview | null> = Object.fromEntries(previewEntries);
 
   // Readable options for assigning a broadcast match to an evening (real matches only).
   const matchOptions = matches.map((m) => ({
@@ -86,6 +98,10 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
       {sp.saved === "prizes" && <Banner>Prijs-teksten opgeslagen.</Banner>}
       {sp.error === "evening_label" && <Banner>Geef de avond een label.</Banner>}
       {sp.error === "evening_matches" && <Banner>Kies 1 of 2 wedstrijden voor de avond.</Banner>}
+      {sp.saved === "frozen" && <Banner>Avond afgesloten — winnaars vastgelegd.</Banner>}
+      {sp.error === "not_finished" && (
+        <Banner>Afsluiten kan pas als de uitgezonden wedstrijd(en) afgelopen (FINISHED) zijn.</Banner>
+      )}
       {sp.deleted && <Banner>Deelnemer {sp.deleted} is verwijderd.</Banner>}
       {sp.error === "participant" && <Banner>Deelnemer niet gevonden.</Banner>}
 
@@ -257,6 +273,16 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
                 />
               </label>
             ))}
+            <label className="text-sm">
+              Hoofdprijs-eis: minimaal aantal avonden aanwezig
+              <input
+                name="prize_min_evenings"
+                type="number"
+                min={1}
+                defaultValue={settings.prize_min_evenings ?? "3"}
+                className="mt-1 w-24 rounded border px-2 py-1.5 text-sm"
+              />
+            </label>
             <div className="sm:col-span-2">
               <button className="rounded bg-brand-ink px-3 py-2 text-sm font-medium text-white">
                 Prijs-teksten opslaan
@@ -286,7 +312,7 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         ) : (
           <div className="space-y-3">
             {evenings.map((e) => (
-              <EveningCard key={e.id} e={e} matchOptions={matchOptions} />
+              <EveningCard key={e.id} e={e} matchOptions={matchOptions} preview={previews[e.id]} />
             ))}
           </div>
         )}
@@ -430,7 +456,15 @@ function MatchSelect({ defaultValue, options }: { defaultValue: string; options:
   );
 }
 
-function EveningCard({ e, matchOptions }: { e: AdminEveningRow; matchOptions: { id: string; label: string }[] }) {
+function EveningCard({
+  e,
+  matchOptions,
+  preview,
+}: {
+  e: AdminEveningRow;
+  matchOptions: { id: string; label: string }[];
+  preview: EveningWinnersPreview | null;
+}) {
   const slot1 = e.dagspellen[0]?.matchId ?? "";
   const slot2 = e.dagspellen[1]?.matchId ?? "";
   return (
@@ -510,6 +544,52 @@ function EveningCard({ e, matchOptions }: { e: AdminEveningRow; matchOptions: { 
           <p className="mt-1.5 text-[11px] text-brand-ink/55">Nu aangewezen: {e.dagspellen.map((d) => d.label).join(" · ")}</p>
         )}
       </form>
+
+      {/* Winnaars + afsluiten (freeze) */}
+      {preview?.hasMatches && (
+        <div className="mt-3 border-t pt-3">
+          <p className="mb-1.5 text-xs font-medium text-brand-ink/70">
+            Winnaars{preview.frozen ? " (vastgelegd)" : preview.allFinished ? " (voorlopig)" : ""}:
+          </p>
+          {!preview.allFinished && !preview.frozen ? (
+            <p className="text-[11px] text-brand-ink/55">Wedstrijd(en) nog niet afgelopen — afsluiten kan straks.</p>
+          ) : (
+            <>
+              <ul className="space-y-0.5 text-[12px]">
+                {preview.perMatch.map((pm, i) => (
+                  <li key={i}>
+                    <span className="text-brand-ink/55">{pm.matchLabel}:</span>{" "}
+                    {!pm.scoreable ? (
+                      <span className="text-brand-ink/45">geen ruststand-data</span>
+                    ) : pm.winnerNames.length ? (
+                      <strong>
+                        {pm.winnerNames.join(", ")}
+                        {pm.winnerNames.length > 1 ? ` (gedeeld door ${pm.winnerNames.length})` : ""}
+                      </strong>
+                    ) : (
+                      <span className="text-brand-ink/45">geen inzendingen</span>
+                    )}
+                  </li>
+                ))}
+                <li>
+                  <span className="text-brand-ink/55">Lucky Loser:</span>{" "}
+                  <strong>{preview.luckyLoserName ?? "—"}</strong>
+                </li>
+              </ul>
+              {preview.frozen ? (
+                <p className="mt-2 text-[11px] font-medium text-green-700">Afgesloten ✓ — vastgelegd</p>
+              ) : (
+                <form action={freezeEveningAction} className="mt-2">
+                  <input type="hidden" name="eveningId" value={e.id} />
+                  <button className="rounded bg-brand-ink px-2.5 py-2 text-xs font-medium text-white">
+                    Avond afsluiten (winnaars vastleggen)
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,8 @@ import { signIn, signOut, isAdmin } from "@/lib/admin-auth";
 import { setSetting } from "@/lib/settings";
 import { refreshMatchData } from "@/lib/refresh";
 import { recomputeScores } from "@/lib/recompute";
+import { loadEveningForFreeze } from "@/lib/prijzenpoule-data";
+import { computeEveningWinners } from "@/lib/prize-scoring";
 import type { MatchStatus } from "@prisma/client";
 
 export async function loginAction(formData: FormData): Promise<void> {
@@ -246,6 +248,48 @@ export async function updatePrizeTextsAction(formData: FormData): Promise<void> 
   for (const key of PRIZE_TEXT_KEYS) {
     await setSetting(key, String(formData.get(key) ?? "").trim());
   }
+  // Attendance requirement for the hoofdprijzen (positive integer; default 3).
+  const raw = Number.parseInt(String(formData.get("prize_min_evenings") ?? ""), 10);
+  await setSetting("prize_min_evenings", Number.isInteger(raw) && raw > 0 ? String(raw) : "3");
   revalidatePrijzenpoule();
   redirect("/beheer?saved=prizes");
+}
+
+/**
+ * Close an evening: compute the dagwinnaar(s) per dagspel + the Lucky Loser ONCE
+ * (pure engine) and FREEZE them — DailyWinner rows + Evening.luckyLoserId +
+ * winnersFrozenAt. Only when every dagspel-match is FINISHED. Idempotent: a second
+ * close is a no-op (winnersFrozenAt already set), so nothing is double-stored.
+ */
+export async function freezeEveningAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("eveningId") ?? "");
+  if (!id) redirect("/beheer?error=evening");
+
+  const data = await loadEveningForFreeze(id);
+  if (!data) redirect("/beheer?error=evening");
+  if (data.frozen) redirect("/beheer?saved=frozen"); // already closed -> no-op
+  if (!data.hasMatches || !data.allFinished) redirect("/beheer?error=not_finished");
+
+  const winners = computeEveningWinners({
+    eveningId: data.eveningId,
+    matches: data.matches,
+    checkedInIds: data.checkedInIds,
+    resultKey: data.resultKey,
+  });
+  const rows = winners.perMatch.flatMap((m) =>
+    m.winnerIds.map((participantId) => ({ eveningMatchId: m.eveningMatchId, participantId })),
+  );
+
+  // createMany with an empty array is a valid no-op, so a fixed 2-tuple is safe.
+  await prisma.$transaction([
+    prisma.dailyWinner.createMany({ data: rows }),
+    prisma.evening.update({
+      where: { id },
+      data: { luckyLoserId: winners.luckyLoserId, winnersFrozenAt: new Date() },
+    }),
+  ]);
+
+  revalidatePrijzenpoule();
+  redirect("/beheer?saved=frozen");
 }
