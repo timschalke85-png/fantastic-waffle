@@ -107,6 +107,27 @@ describe("updateMatchAction (ruststand)", () => {
   });
 });
 
+describe("updateMatchAction (status only written when changed)", () => {
+  beforeEach(() => isAdmin.mockResolvedValue(true));
+
+  it("does NOT write status on a score-only save (dropdown unchanged)", async () => {
+    // The row is LIVE; the admin only enters a score and leaves the dropdown.
+    // The action must not re-persist (and thus freeze) the shown LIVE status.
+    await updateMatchAction(fd({ matchId: "m1", status: "LIVE", originalStatus: "LIVE", homeScore: "2", awayScore: "2" }));
+    expect(prisma.match.update).toHaveBeenCalledTimes(1);
+    const call = prisma.match.update.mock.calls[0][0];
+    expect(call.data).not.toHaveProperty("status");
+    expect(call.data).toMatchObject({ homeScore: 2, awayScore: 2, manuallyOverridden: true });
+  });
+
+  it("writes status when the admin actually changed the dropdown", async () => {
+    await updateMatchAction(fd({ matchId: "m1", status: "FINISHED", originalStatus: "LIVE", homeScore: "2", awayScore: "2" }));
+    expect(prisma.match.update).toHaveBeenCalledTimes(1);
+    const call = prisma.match.update.mock.calls[0][0];
+    expect(call.data).toMatchObject({ status: "FINISHED", manuallyOverridden: true });
+  });
+});
+
 describe("prijzenpoule avond-beheer", () => {
   beforeEach(() => isAdmin.mockResolvedValue(true));
 

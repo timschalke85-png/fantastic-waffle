@@ -52,6 +52,13 @@ export async function updateMatchAction(formData: FormData): Promise<void> {
   const id = String(formData.get("matchId"));
   const status = String(formData.get("status")) as MatchStatus;
   if (!["SCHEDULED", "LIVE", "FINISHED"].includes(status)) redirect("/beheer?error=status");
+  // Only write the status when the admin actually moved the dropdown. The select
+  // defaults to the row's current status, so a score-only save would otherwise
+  // re-persist whatever happened to be shown (e.g. a live API "LIVE") and — via
+  // manuallyOverridden — freeze it forever. Comparing against the rendered value
+  // keeps a score-only edit from silently capturing the status.
+  const originalStatus = String(formData.get("originalStatus") ?? "");
+  const statusChanged = status !== originalStatus;
 
   const homeScore = parseScore(formData.get("homeScore"));
   const awayScore = parseScore(formData.get("awayScore"));
@@ -69,7 +76,15 @@ export async function updateMatchAction(formData: FormData): Promise<void> {
   await dbWrite(() =>
     prisma.match.update({
       where: { id },
-      data: { status, homeScore, awayScore, halfTimeHome, halfTimeAway, manuallyOverridden: true },
+      data: {
+        // Leave the stored status untouched on a score-only save (see above).
+        ...(statusChanged ? { status } : {}),
+        homeScore,
+        awayScore,
+        halfTimeHome,
+        halfTimeAway,
+        manuallyOverridden: true,
+      },
     }),
   );
   // An admin result edit affects the leaderboard — recompute (Fase 7 trigger).

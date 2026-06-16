@@ -403,6 +403,9 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
                     <div className="flex flex-wrap items-center gap-2">
                       <form action={updateMatchAction} className="flex items-center gap-1.5">
                         <input type="hidden" name="matchId" value={m.id} />
+                        {/* The rendered status, so the action can tell a real status
+                            change from a score-only save (never freeze a stale status). */}
+                        <input type="hidden" name="originalStatus" value={m.status} />
                         <select
                           name="status"
                           defaultValue={m.status}
