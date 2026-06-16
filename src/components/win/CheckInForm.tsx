@@ -11,6 +11,7 @@ const ERRORS: Record<string, string> = {
   no_evening: "Er is op dit moment geen avond actief om in te checken.",
   no_code: "De code voor vanavond is nog niet ingesteld — vraag het even bij de bar.",
   wrong_code: "Die code klopt niet. Kijk op het bord of kaartje in het restaurant.",
+  db: "Inchecken mislukt — de database was even niet bereikbaar, probeer opnieuw.",
 };
 
 export function CheckInForm() {

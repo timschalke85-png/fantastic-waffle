@@ -94,6 +94,9 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         </Banner>
       )}
       {sp.saved === "settings" && <Banner>Instellingen opgeslagen.</Banner>}
+      {sp.error === "db" && (
+        <Banner>Opslaan mislukt — de database was even niet bereikbaar. Probeer het opnieuw.</Banner>
+      )}
       {sp.saved === "evening" && <Banner>Avond bijgewerkt.</Banner>}
       {sp.saved === "prizes" && <Banner>Prijs-teksten opgeslagen.</Banner>}
       {sp.error === "evening_label" && <Banner>Geef de avond een label.</Banner>}

@@ -7,50 +7,58 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { currentParticipant } from "@/lib/participant-auth";
 import { parseGoals, isMatchEditable } from "@/lib/predictions-validate";
+import { withDbRetry, isTransientConnectionError } from "@/lib/db-retry";
 
 export type CheckInResult =
   | { ok: true; already: boolean }
-  | { ok: false; error: "auth" | "no_evening" | "no_code" | "wrong_code" };
+  | { ok: false; error: "auth" | "no_evening" | "no_code" | "wrong_code" | "db" };
 
 function isUniqueViolation(e: unknown): boolean {
   return typeof e === "object" && e !== null && "code" in e && (e as { code?: string }).code === "P2002";
 }
 
 export async function checkInAction(formData: FormData): Promise<CheckInResult> {
-  const p = await currentParticipant();
-  if (!p) return { ok: false, error: "auth" };
-
-  const evening = await prisma.evening.findFirst({ where: { isActive: true } });
-  if (!evening) return { ok: false, error: "no_evening" };
-  if (!evening.checkInCode) return { ok: false, error: "no_code" };
-
-  const submitted = String(formData.get("code") ?? "").trim().toLowerCase();
-  if (submitted === "" || submitted !== evening.checkInCode.trim().toLowerCase()) {
-    return { ok: false, error: "wrong_code" };
-  }
-
-  // Idempotent: a second check-in must not fail.
-  const existing = await prisma.checkin.findUnique({
-    where: { eveningId_participantId: { eveningId: evening.id, participantId: p.id } },
-    select: { id: true },
-  });
-  if (existing) return { ok: true, already: true };
-
   try {
-    await prisma.checkin.create({ data: { eveningId: evening.id, participantId: p.id } });
+    const p = await withDbRetry(() => currentParticipant());
+    if (!p) return { ok: false, error: "auth" };
+
+    const evening = await withDbRetry(() => prisma.evening.findFirst({ where: { isActive: true } }));
+    if (!evening) return { ok: false, error: "no_evening" };
+    if (!evening.checkInCode) return { ok: false, error: "no_code" };
+
+    const submitted = String(formData.get("code") ?? "").trim().toLowerCase();
+    if (submitted === "" || submitted !== evening.checkInCode.trim().toLowerCase()) {
+      return { ok: false, error: "wrong_code" };
+    }
+
+    // Idempotent: a second check-in must not fail.
+    const existing = await withDbRetry(() =>
+      prisma.checkin.findUnique({
+        where: { eveningId_participantId: { eveningId: evening.id, participantId: p.id } },
+        select: { id: true },
+      }),
+    );
+    if (existing) return { ok: true, already: true };
+
+    try {
+      await withDbRetry(() => prisma.checkin.create({ data: { eveningId: evening.id, participantId: p.id } }));
+    } catch (e) {
+      if (isUniqueViolation(e)) return { ok: true, already: true }; // race -> already in
+      throw e;
+    }
+    revalidatePath("/win");
+    return { ok: true, already: false };
   } catch (e) {
-    if (isUniqueViolation(e)) return { ok: true, already: true }; // race -> already in
+    if (isTransientConnectionError(e)) return { ok: false, error: "db" };
     throw e;
   }
-  revalidatePath("/win");
-  return { ok: true, already: false };
 }
 
 // --- Dagvoorspelling (doelpunten per team per helft) -----------------------
 
 export type DailySaveResult =
   | { ok: true }
-  | { ok: false; error: "auth" | "not_found" | "not_checked_in" | "locked" | "invalid" };
+  | { ok: false; error: "auth" | "not_found" | "not_checked_in" | "locked" | "invalid" | "db" };
 
 export interface DailyPredictionInput {
   eveningMatchId: string;
@@ -76,34 +84,45 @@ function parseHalfGoals(raw: string): number | null {
  * existing prediction (upsert on eveningMatchId+participantId).
  */
 export async function saveDailyPredictionAction(input: DailyPredictionInput): Promise<DailySaveResult> {
-  const p = await currentParticipant();
-  if (!p) return { ok: false, error: "auth" };
+  try {
+    const p = await withDbRetry(() => currentParticipant());
+    if (!p) return { ok: false, error: "auth" };
 
-  const em = await prisma.eveningMatch.findUnique({
-    where: { id: input.eveningMatchId },
-    include: { match: { select: { kickoffUtc: true } } },
-  });
-  if (!em) return { ok: false, error: "not_found" };
+    const em = await withDbRetry(() =>
+      prisma.eveningMatch.findUnique({
+        where: { id: input.eveningMatchId },
+        include: { match: { select: { kickoffUtc: true } } },
+      }),
+    );
+    if (!em) return { ok: false, error: "not_found" };
 
-  const checkin = await prisma.checkin.findUnique({
-    where: { eveningId_participantId: { eveningId: em.eveningId, participantId: p.id } },
-    select: { id: true },
-  });
-  if (!checkin) return { ok: false, error: "not_checked_in" };
+    const checkin = await withDbRetry(() =>
+      prisma.checkin.findUnique({
+        where: { eveningId_participantId: { eveningId: em.eveningId, participantId: p.id } },
+        select: { id: true },
+      }),
+    );
+    if (!checkin) return { ok: false, error: "not_checked_in" };
 
-  if (!isMatchEditable(em.match.kickoffUtc, Date.now(), null)) return { ok: false, error: "locked" };
+    if (!isMatchEditable(em.match.kickoffUtc, Date.now(), null)) return { ok: false, error: "locked" };
 
-  const fhh = parseHalfGoals(input.firstHalfHome);
-  const fha = parseHalfGoals(input.firstHalfAway);
-  const shh = parseHalfGoals(input.secondHalfHome);
-  const sha = parseHalfGoals(input.secondHalfAway);
-  if (fhh === null || fha === null || shh === null || sha === null) return { ok: false, error: "invalid" };
+    const fhh = parseHalfGoals(input.firstHalfHome);
+    const fha = parseHalfGoals(input.firstHalfAway);
+    const shh = parseHalfGoals(input.secondHalfHome);
+    const sha = parseHalfGoals(input.secondHalfAway);
+    if (fhh === null || fha === null || shh === null || sha === null) return { ok: false, error: "invalid" };
 
-  await prisma.dailyPrediction.upsert({
-    where: { eveningMatchId_participantId: { eveningMatchId: em.id, participantId: p.id } },
-    create: { eveningMatchId: em.id, participantId: p.id, firstHalfHome: fhh, firstHalfAway: fha, secondHalfHome: shh, secondHalfAway: sha },
-    update: { firstHalfHome: fhh, firstHalfAway: fha, secondHalfHome: shh, secondHalfAway: sha },
-  });
-  revalidatePath("/win");
-  return { ok: true };
+    await withDbRetry(() =>
+      prisma.dailyPrediction.upsert({
+        where: { eveningMatchId_participantId: { eveningMatchId: em.id, participantId: p.id } },
+        create: { eveningMatchId: em.id, participantId: p.id, firstHalfHome: fhh, firstHalfAway: fha, secondHalfHome: shh, secondHalfAway: sha },
+        update: { firstHalfHome: fhh, firstHalfAway: fha, secondHalfHome: shh, secondHalfAway: sha },
+      }),
+    );
+    revalidatePath("/win");
+    return { ok: true };
+  } catch (e) {
+    if (isTransientConnectionError(e)) return { ok: false, error: "db" };
+    throw e;
+  }
 }

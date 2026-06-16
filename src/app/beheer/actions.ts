@@ -9,6 +9,7 @@ import { refreshMatchData } from "@/lib/refresh";
 import { recomputeScores } from "@/lib/recompute";
 import { loadEveningForFreeze } from "@/lib/prijzenpoule-data";
 import { computeEveningWinners } from "@/lib/prize-scoring";
+import { withDbRetry, isTransientConnectionError } from "@/lib/db-retry";
 import type { MatchStatus } from "@prisma/client";
 
 export async function loginAction(formData: FormData): Promise<void> {
@@ -23,6 +24,18 @@ export async function logoutAction(): Promise<void> {
 
 async function requireAdmin(): Promise<void> {
   if (!(await isAdmin())) redirect("/beheer?error=auth");
+}
+
+/** Run a DB write with one transient-connection retry (Neon scale-to-zero). On a
+ *  persistent connection failure, redirect to a clear "opslaan mislukt" notice
+ *  instead of an error overlay — a failed write never looks successful. */
+async function dbWrite<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await withDbRetry(fn);
+  } catch (e) {
+    if (isTransientConnectionError(e)) redirect("/beheer?error=db");
+    throw e;
+  }
 }
 
 function parseScore(raw: FormDataEntryValue | null): number | null {
@@ -53,17 +66,12 @@ export async function updateMatchAction(formData: FormData): Promise<void> {
     redirect("/beheer?error=ruststand");
   }
 
-  await prisma.match.update({
-    where: { id },
-    data: {
-      status,
-      homeScore,
-      awayScore,
-      halfTimeHome,
-      halfTimeAway,
-      manuallyOverridden: true,
-    },
-  });
+  await dbWrite(() =>
+    prisma.match.update({
+      where: { id },
+      data: { status, homeScore, awayScore, halfTimeHome, halfTimeAway, manuallyOverridden: true },
+    }),
+  );
   // An admin result edit affects the leaderboard — recompute (Fase 7 trigger).
   // Scoring must not break the admin flow, so failures are swallowed.
   try {
@@ -79,10 +87,9 @@ export async function updateMatchAction(formData: FormData): Promise<void> {
 /** Clear a manual override so the API drives this match again. */
 export async function clearOverrideAction(formData: FormData): Promise<void> {
   await requireAdmin();
-  await prisma.match.update({
-    where: { id: String(formData.get("matchId")) },
-    data: { manuallyOverridden: false },
-  });
+  await dbWrite(() =>
+    prisma.match.update({ where: { id: String(formData.get("matchId")) }, data: { manuallyOverridden: false } }),
+  );
   revalidatePath("/beheer");
   revalidatePath("/");
 }
@@ -99,10 +106,10 @@ export async function deleteParticipantAction(formData: FormData): Promise<void>
   await requireAdmin();
   const id = String(formData.get("participantId") ?? "");
   if (!id) redirect("/beheer?error=participant");
-  const p = await prisma.participant.findUnique({ where: { id }, select: { nickname: true } });
+  const p = await dbWrite(() => prisma.participant.findUnique({ where: { id }, select: { nickname: true } }));
   if (!p) redirect("/beheer?error=participant");
 
-  await prisma.participant.delete({ where: { id } }); // cascade removes predictions + score
+  await dbWrite(() => prisma.participant.delete({ where: { id } })); // cascade removes predictions + score
   revalidatePath("/beheer");
   revalidatePath("/klassement");
   revalidatePath("/");
@@ -116,19 +123,21 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
   const knockoutLock = String(formData.get("knockout_lock_utc") ?? "").trim();
   const knockoutOpen = formData.get("knockout_open") === "on";
 
-  if (groupLock) {
-    const d = new Date(groupLock);
-    if (!Number.isNaN(d.getTime())) await setSetting("group_lock_utc", d.toISOString());
-  }
-  if (groupFloor) {
-    const d = new Date(groupFloor);
-    if (!Number.isNaN(d.getTime())) await setSetting("group_eligibility_floor_utc", d.toISOString());
-  }
-  await setSetting("knockout_open", knockoutOpen ? "true" : "false");
-  if (knockoutLock) {
-    const d = new Date(knockoutLock);
-    if (!Number.isNaN(d.getTime())) await setSetting("knockout_lock_utc", d.toISOString());
-  }
+  await dbWrite(async () => {
+    if (groupLock) {
+      const d = new Date(groupLock);
+      if (!Number.isNaN(d.getTime())) await setSetting("group_lock_utc", d.toISOString());
+    }
+    if (groupFloor) {
+      const d = new Date(groupFloor);
+      if (!Number.isNaN(d.getTime())) await setSetting("group_eligibility_floor_utc", d.toISOString());
+    }
+    await setSetting("knockout_open", knockoutOpen ? "true" : "false");
+    if (knockoutLock) {
+      const d = new Date(knockoutLock);
+      if (!Number.isNaN(d.getTime())) await setSetting("knockout_lock_utc", d.toISOString());
+    }
+  });
   revalidatePath("/beheer");
   redirect("/beheer?saved=settings");
 }
@@ -138,13 +147,11 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
  *  in from the real schedule. No-op with a notice if no R32 matches exist yet. */
 export async function setKnockoutLockFromR32Action(): Promise<void> {
   await requireAdmin();
-  const earliest = await prisma.match.findFirst({
-    where: { stage: "R32" },
-    orderBy: { kickoffUtc: "asc" },
-    select: { kickoffUtc: true },
-  });
+  const earliest = await dbWrite(() =>
+    prisma.match.findFirst({ where: { stage: "R32" }, orderBy: { kickoffUtc: "asc" }, select: { kickoffUtc: true } }),
+  );
   if (!earliest) redirect("/beheer?error=no_r32");
-  await setSetting("knockout_lock_utc", earliest.kickoffUtc.toISOString());
+  await dbWrite(() => setSetting("knockout_lock_utc", earliest.kickoffUtc.toISOString()));
   revalidatePath("/beheer");
   redirect("/beheer?saved=ko_lock");
 }
@@ -184,7 +191,7 @@ export async function createEveningAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const label = String(formData.get("label") ?? "").trim();
   if (!label) redirect("/beheer?error=evening_label");
-  await prisma.evening.create({ data: { label } });
+  await dbWrite(() => prisma.evening.create({ data: { label } }));
   revalidatePrijzenpoule();
   redirect("/beheer?saved=evening");
 }
@@ -194,7 +201,7 @@ export async function setEveningCodeAction(formData: FormData): Promise<void> {
   const id = String(formData.get("eveningId") ?? "");
   if (!id) redirect("/beheer?error=evening");
   const code = String(formData.get("checkInCode") ?? "").trim();
-  await prisma.evening.update({ where: { id }, data: { checkInCode: code || null } });
+  await dbWrite(() => prisma.evening.update({ where: { id }, data: { checkInCode: code || null } }));
   revalidatePrijzenpoule();
   redirect("/beheer?saved=evening");
 }
@@ -205,10 +212,12 @@ export async function activateEveningAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = String(formData.get("eveningId") ?? "");
   if (!id) redirect("/beheer?error=evening");
-  await prisma.$transaction([
-    prisma.evening.updateMany({ where: { isActive: true }, data: { isActive: false } }),
-    prisma.evening.update({ where: { id }, data: { isActive: true } }),
-  ]);
+  await dbWrite(() =>
+    prisma.$transaction([
+      prisma.evening.updateMany({ where: { isActive: true }, data: { isActive: false } }),
+      prisma.evening.update({ where: { id }, data: { isActive: true } }),
+    ]),
+  );
   revalidatePrijzenpoule();
   redirect("/beheer?saved=evening");
 }
@@ -217,7 +226,7 @@ export async function deactivateEveningAction(formData: FormData): Promise<void>
   await requireAdmin();
   const id = String(formData.get("eveningId") ?? "");
   if (!id) redirect("/beheer?error=evening");
-  await prisma.evening.update({ where: { id }, data: { isActive: false } });
+  await dbWrite(() => prisma.evening.update({ where: { id }, data: { isActive: false } }));
   revalidatePrijzenpoule();
   redirect("/beheer?saved=evening");
 }
@@ -230,12 +239,14 @@ export async function setEveningMatchesAction(formData: FormData): Promise<void>
   if (!id) redirect("/beheer?error=evening");
   const matchIds = [...new Set(formData.getAll("matchId").map(String).filter(Boolean))];
   if (matchIds.length < 1 || matchIds.length > 2) redirect("/beheer?error=evening_matches");
-  await prisma.$transaction([
-    prisma.eveningMatch.deleteMany({ where: { eveningId: id } }),
-    ...matchIds.map((matchId, i) =>
-      prisma.eveningMatch.create({ data: { eveningId: id, matchId, ordinal: i + 1 } }),
-    ),
-  ]);
+  await dbWrite(() =>
+    prisma.$transaction([
+      prisma.eveningMatch.deleteMany({ where: { eveningId: id } }),
+      ...matchIds.map((matchId, i) =>
+        prisma.eveningMatch.create({ data: { eveningId: id, matchId, ordinal: i + 1 } }),
+      ),
+    ]),
+  );
   revalidatePrijzenpoule();
   redirect("/beheer?saved=evening");
 }
@@ -245,7 +256,7 @@ export async function togglePollAction(formData: FormData): Promise<void> {
   const id = String(formData.get("eveningId") ?? "");
   if (!id) redirect("/beheer?error=evening");
   const open = String(formData.get("open") ?? "") === "true";
-  await prisma.evening.update({ where: { id }, data: { pollOpen: open } });
+  await dbWrite(() => prisma.evening.update({ where: { id }, data: { pollOpen: open } }));
   revalidatePrijzenpoule();
   redirect("/beheer?saved=evening");
 }
@@ -261,12 +272,14 @@ const PRIZE_TEXT_KEYS = [
 /** Edit the prijzenpoule prize texts (settings) — admin fills in the real prizes. */
 export async function updatePrizeTextsAction(formData: FormData): Promise<void> {
   await requireAdmin();
-  for (const key of PRIZE_TEXT_KEYS) {
-    await setSetting(key, String(formData.get(key) ?? "").trim());
-  }
   // Attendance requirement for the hoofdprijzen (positive integer; default 3).
   const raw = Number.parseInt(String(formData.get("prize_min_evenings") ?? ""), 10);
-  await setSetting("prize_min_evenings", Number.isInteger(raw) && raw > 0 ? String(raw) : "3");
+  await dbWrite(async () => {
+    for (const key of PRIZE_TEXT_KEYS) {
+      await setSetting(key, String(formData.get(key) ?? "").trim());
+    }
+    await setSetting("prize_min_evenings", Number.isInteger(raw) && raw > 0 ? String(raw) : "3");
+  });
   revalidatePrijzenpoule();
   redirect("/beheer?saved=prizes");
 }
@@ -282,7 +295,7 @@ export async function freezeEveningAction(formData: FormData): Promise<void> {
   const id = String(formData.get("eveningId") ?? "");
   if (!id) redirect("/beheer?error=evening");
 
-  const data = await loadEveningForFreeze(id);
+  const data = await dbWrite(() => loadEveningForFreeze(id));
   if (!data) redirect("/beheer?error=evening");
   if (data.frozen) redirect("/beheer?saved=frozen"); // already closed -> no-op
   if (!data.hasMatches || !data.allFinished) redirect("/beheer?error=not_finished");
@@ -298,13 +311,15 @@ export async function freezeEveningAction(formData: FormData): Promise<void> {
   );
 
   // createMany with an empty array is a valid no-op, so a fixed 2-tuple is safe.
-  await prisma.$transaction([
-    prisma.dailyWinner.createMany({ data: rows }),
-    prisma.evening.update({
-      where: { id },
-      data: { luckyLoserId: winners.luckyLoserId, winnersFrozenAt: new Date() },
-    }),
-  ]);
+  await dbWrite(() =>
+    prisma.$transaction([
+      prisma.dailyWinner.createMany({ data: rows }),
+      prisma.evening.update({
+        where: { id },
+        data: { luckyLoserId: winners.luckyLoserId, winnersFrozenAt: new Date() },
+      }),
+    ]),
+  );
 
   revalidatePrijzenpoule();
   redirect("/beheer?saved=frozen");

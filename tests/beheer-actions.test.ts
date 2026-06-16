@@ -126,6 +126,12 @@ describe("prijzenpoule avond-beheer", () => {
     expect(prisma.evening.create).toHaveBeenCalledWith({ data: { label: "Avond 1" } });
   });
 
+  it("redirects to ?error=db when a write keeps failing with a connection error (after one retry)", async () => {
+    prisma.evening.create.mockRejectedValue({ code: "57P01" });
+    await expect(createEveningAction(fd({ label: "Avond 1" }))).rejects.toThrow("REDIRECT:/beheer?error=db");
+    expect(prisma.evening.create).toHaveBeenCalledTimes(2); // original + one retry
+  });
+
   it("activateEvening clears all then activates exactly one (single transaction)", async () => {
     await expect(activateEveningAction(fd({ eveningId: "e1" }))).rejects.toThrow("REDIRECT:/beheer?saved=evening");
     expect(prisma.evening.updateMany).toHaveBeenCalledWith({ where: { isActive: true }, data: { isActive: false } });

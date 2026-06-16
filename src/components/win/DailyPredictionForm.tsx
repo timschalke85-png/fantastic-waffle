@@ -13,6 +13,7 @@ const ERRORS: Record<string, string> = {
   not_checked_in: "Check eerst in voor vanavond.",
   locked: "De wedstrijd is begonnen — voorspellen kan niet meer.",
   invalid: "Vul alle vier de getallen in (0 of hoger).",
+  db: "Opslaan mislukt — de database was even niet bereikbaar, probeer opnieuw.",
 };
 
 const numeric = (s: string) => s.replace(/[^0-9]/g, "").slice(0, 2);
