@@ -9,7 +9,7 @@ const { prisma, isAdmin, redirect, setSetting, loadEveningForFreeze } = vi.hoist
     match: { update: vi.fn() },
     evening: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     eveningMatch: { deleteMany: vi.fn(), create: vi.fn() },
-    dailyWinner: { createMany: vi.fn(), deleteMany: vi.fn() },
+    dailyWinner: { createMany: vi.fn() },
     $transaction: vi.fn(async (ops: unknown[]) => ops),
   },
   isAdmin: vi.fn(),
@@ -38,7 +38,6 @@ import {
   togglePollAction,
   updatePrizeTextsAction,
   freezeEveningAction,
-  reopenEveningAction,
 } from "../src/app/beheer/actions";
 
 const fd = (obj: Record<string, string>) => {
@@ -246,23 +245,6 @@ describe("freezeEveningAction", () => {
     expect(upd.where).toEqual({ id: "e1" });
     expect(["b", "c"]).toContain(upd.data.luckyLoserId); // dagwinnaar "a" excluded
     expect(upd.data.winnersFrozenAt).toBeInstanceOf(Date);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("reopenEveningAction", () => {
-  beforeEach(() => isAdmin.mockResolvedValue(true));
-
-  it("rejects a non-admin and wipes nothing", async () => {
-    isAdmin.mockResolvedValue(false);
-    await expect(reopenEveningAction(fd({ eveningId: "e1" }))).rejects.toThrow("REDIRECT:/beheer?error=auth");
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  it("wipes the freeze: deletes the DailyWinner rows and nulls luckyLoserId + winnersFrozenAt", async () => {
-    await expect(reopenEveningAction(fd({ eveningId: "e1" }))).rejects.toThrow("REDIRECT:/beheer?saved=reopened");
-    expect(prisma.dailyWinner.deleteMany).toHaveBeenCalledWith({ where: { eveningMatch: { eveningId: "e1" } } });
-    expect(prisma.evening.update).toHaveBeenCalledWith({ where: { id: "e1" }, data: { luckyLoserId: null, winnersFrozenAt: null } });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });

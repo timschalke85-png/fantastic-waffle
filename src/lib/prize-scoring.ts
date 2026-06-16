@@ -179,27 +179,6 @@ export function computeEveningWinners(input: {
   return { perMatch, luckyLoserId };
 }
 
-export interface StoredWinners {
-  perMatch: { eveningMatchId: string; winnerIds: string[] }[];
-  luckyLoserId: string | null;
-}
-
-/**
- * True when the STORED (frozen) winners differ from what the engine would compute
- * NOW — i.e. the match result was edited after the evening was closed. Order of
- * winner ids within a dagspel is irrelevant. Pure.
- */
-export function winnersDiverged(stored: StoredWinners, live: EveningWinners): boolean {
-  if ((stored.luckyLoserId ?? null) !== (live.luckyLoserId ?? null)) return true;
-  const key = (ids: string[]) => [...ids].sort().join(",");
-  const storedByMatch = new Map(stored.perMatch.map((pm) => [pm.eveningMatchId, key(pm.winnerIds)]));
-  const liveByMatch = new Map(live.perMatch.map((pm) => [pm.eveningMatchId, key(pm.winnerIds)]));
-  for (const id of new Set([...storedByMatch.keys(), ...liveByMatch.keys()])) {
-    if ((storedByMatch.get(id) ?? "") !== (liveByMatch.get(id) ?? "")) return true;
-  }
-  return false;
-}
-
 export interface HoofdprijsWinner {
   rank: number; // prize slot 1..slots
   participantId: string;

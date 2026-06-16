@@ -324,23 +324,3 @@ export async function freezeEveningAction(formData: FormData): Promise<void> {
   revalidatePrijzenpoule();
   redirect("/beheer?saved=frozen");
 }
-
-/**
- * Reopen a closed evening: wipe the freeze (DailyWinner rows + null luckyLoserId +
- * null winnersFrozenAt) so the result can be corrected and the evening closed
- * again. Deliberate (admin + two-step confirm in the UI) — frozen winners NEVER
- * change silently; only via this action.
- */
-export async function reopenEveningAction(formData: FormData): Promise<void> {
-  await requireAdmin();
-  const id = String(formData.get("eveningId") ?? "");
-  if (!id) redirect("/beheer?error=evening");
-  await dbWrite(() =>
-    prisma.$transaction([
-      prisma.dailyWinner.deleteMany({ where: { eveningMatch: { eveningId: id } } }),
-      prisma.evening.update({ where: { id }, data: { luckyLoserId: null, winnersFrozenAt: null } }),
-    ]),
-  );
-  revalidatePrijzenpoule();
-  redirect("/beheer?saved=reopened");
-}

@@ -27,7 +27,6 @@ import {
   togglePollAction,
   updatePrizeTextsAction,
   freezeEveningAction,
-  reopenEveningAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -73,7 +72,6 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
   // Two-step delete confirmation: ?confirmDelete=<id> shows a confirm block with
   // the real bijnaam before the irreversible action.
   const confirmTarget = sp.confirmDelete ? participants.find((p) => p.id === sp.confirmDelete) : undefined;
-  const confirmReopenTarget = sp.confirmReopen ? evenings.find((e) => e.id === sp.confirmReopen) : undefined;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
@@ -104,30 +102,6 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
       {sp.error === "evening_label" && <Banner>Geef de avond een label.</Banner>}
       {sp.error === "evening_matches" && <Banner>Kies 1 of 2 wedstrijden voor de avond.</Banner>}
       {sp.saved === "frozen" && <Banner>Avond afgesloten — winnaars vastgelegd.</Banner>}
-      {sp.saved === "reopened" && (
-        <Banner>Avond heropend — corrigeer de uitslag en sluit opnieuw af.</Banner>
-      )}
-
-      {confirmReopenTarget && (
-        <div className="mb-4 rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-800">Avond heropenen?</p>
-          <p className="mt-1 text-[13px] text-amber-700">
-            Hiermee wis je de vastgelegde winnaars van <strong>{confirmReopenTarget.label}</strong>{" "}
-            (dagwinnaars + Lucky Loser). Je kunt daarna de uitslag corrigeren en de avond opnieuw afsluiten.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <form action={reopenEveningAction}>
-              <input type="hidden" name="eveningId" value={confirmReopenTarget.id} />
-              <button className="rounded bg-amber-600 px-3 py-2 text-sm font-semibold text-white">
-                Ja, heropenen
-              </button>
-            </form>
-            <a href="/beheer" className="rounded border px-3 py-2 text-sm">
-              Annuleren
-            </a>
-          </div>
-        </div>
-      )}
       {sp.error === "ruststand" && (
         <Banner>Onmogelijke ruststand: een team kan bij rust niet meer goals hebben dan aan het eind.</Banner>
       )}
@@ -607,12 +581,6 @@ function EveningCard({
             <p className="text-[11px] text-brand-ink/55">Wedstrijd(en) nog niet afgelopen — afsluiten kan straks.</p>
           ) : (
             <>
-              {view.diverged && (
-                <p className="mb-1.5 rounded bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">
-                  ⚠ De uitslag is ná het afsluiten gewijzigd — de vastgelegde winnaars wijken af van de huidige
-                  uitslag. Heropen om opnieuw vast te leggen.
-                </p>
-              )}
               <ul className="space-y-0.5 text-[12px]">
                 {view.perMatch.map((pm, i) => (
                   <li key={i}>
@@ -635,12 +603,7 @@ function EveningCard({
                 </li>
               </ul>
               {view.frozen ? (
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <span className="text-[11px] font-medium text-green-700">Afgesloten ✓ — vastgelegd</span>
-                  <a href={`/beheer?confirmReopen=${e.id}`} className="text-[11px] text-amber-700 underline">
-                    Heropenen &amp; opnieuw vastleggen
-                  </a>
-                </div>
+                <p className="mt-2 text-[11px] font-medium text-green-700">Afgesloten ✓ — vastgelegd</p>
               ) : (
                 <form action={freezeEveningAction} className="mt-2">
                   <input type="hidden" name="eveningId" value={e.id} />

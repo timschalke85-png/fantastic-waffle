@@ -1,6 +1,6 @@
 // loadEveningWinnersView must show the STORED (frozen) winners after closing —
-// never a recomputation — and flag divergence when the result was edited after.
-// DB mocked; the pure engine (computeEveningWinners/winnersDiverged) runs for real.
+// never a recomputation — so /beheer matches /win even if a result is edited later.
+// DB mocked; the pure engine (computeEveningWinners) runs for real.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -29,9 +29,9 @@ const checkins = [
 beforeEach(() => vi.clearAllMocks());
 
 describe("loadEveningWinnersView", () => {
-  it("after closing, shows the STORED winners (not the recomputation) and flags divergence", async () => {
-    // Stored dagwinnaar = "b" while a live recompute would pick "a" (result edited
-    // after freezing). Stored lucky loser = "c".
+  it("after closing, shows the STORED winners — not a recomputation", async () => {
+    // Stored dagwinnaar = "b" while a live recompute would pick "a" (e.g. the result
+    // was edited after freezing). /beheer must still show the stored "Bob".
     prisma.evening.findUnique.mockResolvedValue({
       id: "e1",
       winnersFrozenAt: new Date(),
@@ -46,10 +46,9 @@ describe("loadEveningWinnersView", () => {
     expect(view!.frozen).toBe(true);
     expect(view!.perMatch[0].winnerNames).toEqual(["Bob"]); // stored, NOT the live "Ann"
     expect(view!.luckyLoserName).toBe("Cas");
-    expect(view!.diverged).toBe(true); // result no longer matches the frozen winner
   });
 
-  it("before closing, shows the live preview and does not flag divergence", async () => {
+  it("before closing, shows the live preview", async () => {
     prisma.evening.findUnique.mockResolvedValue({
       id: "e1",
       winnersFrozenAt: null,
@@ -61,7 +60,6 @@ describe("loadEveningWinnersView", () => {
 
     const view = await loadEveningWinnersView("e1");
     expect(view!.frozen).toBe(false);
-    expect(view!.diverged).toBe(false);
     expect(view!.perMatch[0].winnerNames).toEqual(["Ann"]); // live computation
   });
 

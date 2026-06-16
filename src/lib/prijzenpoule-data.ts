@@ -8,7 +8,6 @@ import { loadKlassement } from "./klassement-data";
 import {
   assignHoofdprijzen,
   computeEveningWinners,
-  winnersDiverged,
   type EveningMatchInput,
   type DailyActual,
 } from "./prize-scoring";
@@ -343,7 +342,6 @@ export interface EveningWinnersView {
   hasMatches: boolean;
   allFinished: boolean;
   frozen: boolean;
-  diverged: boolean; // frozen AND the current result would give different winners
   perMatch: { matchLabel: string; winnerNames: string[]; scoreable: boolean }[];
   luckyLoserName: string | null;
 }
@@ -351,9 +349,8 @@ export interface EveningWinnersView {
 /**
  * Winners for the /beheer section. BEFORE freezing: a live preview (computed).
  * AFTER freezing: the STORED winners (DailyWinner + Evening.luckyLoser) — never a
- * recomputation, so /beheer matches /win and the awarded prize. Also reports
- * `diverged` = the result was edited after closing (stored ≠ would-be-now), so the
- * admin can reopen + re-close deliberately. Self-contained (one query).
+ * recomputation, so /beheer matches /win and the awarded prize even if a result is
+ * edited later. Self-contained (one query).
  */
 export async function loadEveningWinnersView(eveningId: string): Promise<EveningWinnersView | null> {
   const e = await prisma.evening.findUnique({
@@ -411,14 +408,13 @@ export async function loadEveningWinnersView(eveningId: string): Promise<Evening
     keyParts.push(`${em.id}=${scoreable ? `${m.homeScore}-${m.awayScore}` : "na"}`);
   }
 
-  const live = computeEveningWinners({ eveningId: e.id, matches: matchInputs, checkedInIds, resultKey: keyParts.join("|") });
-  const stored = {
-    perMatch: e.matches.map((em) => ({ eveningMatchId: em.id, winnerIds: em.winners.map((w) => w.participantId) })),
-    luckyLoserId: e.luckyLoserId ?? null,
-  };
-  const diverged = frozen ? winnersDiverged(stored, live) : false;
+  // Stored winners once frozen; live preview before that. Never recompute a
+  // frozen evening, so /beheer matches /win and the awarded prize.
+  const live = frozen
+    ? null
+    : computeEveningWinners({ eveningId: e.id, matches: matchInputs, checkedInIds, resultKey: keyParts.join("|") });
+  const liveByMatch = new Map((live?.perMatch ?? []).map((pm) => [pm.eveningMatchId, pm.winnerIds]));
 
-  const liveByMatch = new Map(live.perMatch.map((pm) => [pm.eveningMatchId, pm.winnerIds]));
   const perMatch = e.matches.map((em, i) => {
     const ids = frozen ? em.winners.map((w) => w.participantId) : liveByMatch.get(em.id) ?? [];
     return {
@@ -429,9 +425,9 @@ export async function loadEveningWinnersView(eveningId: string): Promise<Evening
   });
   const luckyLoserName = frozen
     ? e.luckyLoser?.nickname ?? null
-    : live.luckyLoserId
+    : live?.luckyLoserId
       ? nameOf[live.luckyLoserId] ?? live.luckyLoserId
       : null;
 
-  return { hasMatches: e.matches.length > 0, allFinished, frozen, diverged, perMatch, luckyLoserName };
+  return { hasMatches: e.matches.length > 0, allFinished, frozen, perMatch, luckyLoserName };
 }
