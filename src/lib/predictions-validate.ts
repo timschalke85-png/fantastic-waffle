@@ -104,3 +104,19 @@ export function isMatchEditable(kickoffUtc: Date, nowMs: number, globalLockUtc: 
   if (globalLockUtc !== null && nowMs >= globalLockUtc.getTime()) return false;
   return true;
 }
+
+/**
+ * Day-game (prijzenpoule) input lock. A dagspel is open ONLY while its match has
+ * not started — meaning BOTH: it is still SCHEDULED *and* it has not reached its
+ * kickoff time. The match STATUS is the authoritative "has started" signal: once
+ * the admin or the API marks a match LIVE/FINISHED it is locked even if the
+ * stored kickoff time is still in the future (e.g. an early result entry, or the
+ * real kickoff differing from the seeded time). The plain kickoff-time check
+ * missed exactly that case, so a finished match stayed predictable. Enforced
+ * server-side in saveDailyPredictionAction, mirrored in the /win UI.
+ */
+export function isDagspelOpen(kickoffUtc: Date, status: string, nowMs: number): boolean {
+  if (status !== "SCHEDULED") return false;
+  if (nowMs >= kickoffUtc.getTime()) return false;
+  return true;
+}

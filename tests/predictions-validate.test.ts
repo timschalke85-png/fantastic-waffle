@@ -8,6 +8,7 @@ import {
   validateRanking,
   isEligibleMatch,
   isMatchEditable,
+  isDagspelOpen,
 } from "../src/lib/predictions-validate";
 
 describe("isValidPin", () => {
@@ -122,5 +123,22 @@ describe("isMatchEditable", () => {
   it("with no global lock set, only the per-match kickoff applies", () => {
     expect(isMatchEditable(kickoff, ms("2026-06-17T12:00:00Z"), null)).toBe(true);
     expect(isMatchEditable(kickoff, ms("2026-06-19T12:00:00Z"), null)).toBe(false);
+  });
+});
+
+describe("isDagspelOpen", () => {
+  const kickoff = new Date("2026-06-18T16:00:00Z");
+  const ms = (iso: string) => new Date(iso).getTime();
+
+  it("is open only while SCHEDULED and before kickoff", () => {
+    expect(isDagspelOpen(kickoff, "SCHEDULED", ms("2026-06-17T12:00:00Z"))).toBe(true);
+  });
+  it("locks at/after kickoff", () => {
+    expect(isDagspelOpen(kickoff, "SCHEDULED", ms("2026-06-18T16:00:00Z"))).toBe(false);
+    expect(isDagspelOpen(kickoff, "SCHEDULED", ms("2026-06-18T16:00:01Z"))).toBe(false);
+  });
+  it("locks as soon as the status leaves SCHEDULED, even with a future kickoff (BUG 2)", () => {
+    expect(isDagspelOpen(kickoff, "LIVE", ms("2026-06-17T12:00:00Z"))).toBe(false);
+    expect(isDagspelOpen(kickoff, "FINISHED", ms("2026-06-17T12:00:00Z"))).toBe(false);
   });
 });

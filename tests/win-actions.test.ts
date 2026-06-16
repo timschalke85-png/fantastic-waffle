@@ -98,7 +98,7 @@ describe("saveDailyPredictionAction", () => {
   // Default happy context: signed in, checked in, future kickoff.
   beforeEach(() => {
     currentParticipant.mockResolvedValue({ id: "p1" });
-    prisma.eveningMatch.findUnique.mockResolvedValue({ id: "em1", eveningId: "e1", match: { kickoffUtc: FUTURE } });
+    prisma.eveningMatch.findUnique.mockResolvedValue({ id: "em1", eveningId: "e1", match: { kickoffUtc: FUTURE, status: "SCHEDULED" } });
     prisma.checkin.findUnique.mockResolvedValue({ id: "c1" });
   });
 
@@ -120,9 +120,22 @@ describe("saveDailyPredictionAction", () => {
   });
 
   it("rejects after the match has kicked off (kickoff-lock)", async () => {
-    prisma.eveningMatch.findUnique.mockResolvedValue({ id: "em1", eveningId: "e1", match: { kickoffUtc: PAST } });
+    prisma.eveningMatch.findUnique.mockResolvedValue({ id: "em1", eveningId: "e1", match: { kickoffUtc: PAST, status: "SCHEDULED" } });
     expect(await saveDailyPredictionAction(dp())).toEqual({ ok: false, error: "locked" });
     expect(prisma.dailyPrediction.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects once the match is no longer SCHEDULED, even with a future kickoff (status-lock)", async () => {
+    // The crux of BUG 2: a match marked LIVE/FINISHED before its stored kickoff
+    // must lock the dagspel — otherwise you could predict on a known result.
+    for (const status of ["LIVE", "FINISHED"]) {
+      vi.clearAllMocks();
+      currentParticipant.mockResolvedValue({ id: "p1" });
+      prisma.checkin.findUnique.mockResolvedValue({ id: "c1" });
+      prisma.eveningMatch.findUnique.mockResolvedValue({ id: "em1", eveningId: "e1", match: { kickoffUtc: FUTURE, status } });
+      expect(await saveDailyPredictionAction(dp())).toEqual({ ok: false, error: "locked" });
+      expect(prisma.dailyPrediction.upsert).not.toHaveBeenCalled();
+    }
   });
 
   it("rejects invalid numbers (negative, non-integer, empty, or above the cap)", async () => {

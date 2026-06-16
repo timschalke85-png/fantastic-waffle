@@ -15,6 +15,7 @@ import {
   type HoofdprijzenData,
 } from "@/lib/prijzenpoule-data";
 import { DAILY_SCORING } from "@/config/prize-scoring";
+import { isDagspelOpen } from "@/lib/predictions-validate";
 import { CheckInForm } from "@/components/win/CheckInForm";
 import { DailyPredictionForm } from "@/components/win/DailyPredictionForm";
 
@@ -253,7 +254,8 @@ function CheckedInBlock({ data, prizes }: { data: WinData; prizes: PrizeTexts })
               key={d.eveningMatchId}
               dagspel={d}
               existing={data.existing[d.eveningMatchId]}
-              locked={new Date(d.kickoffIso).getTime() <= now}
+              // Locked once the match started: kicked off OR no longer SCHEDULED.
+              locked={!isDagspelOpen(new Date(d.kickoffIso), d.status, now)}
             />
           ))}
         </ul>

@@ -6,7 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { currentParticipant } from "@/lib/participant-auth";
-import { parseGoals, isMatchEditable } from "@/lib/predictions-validate";
+import { parseGoals, isDagspelOpen } from "@/lib/predictions-validate";
 import { withDbRetry, isTransientConnectionError } from "@/lib/db-retry";
 
 export type CheckInResult =
@@ -91,7 +91,7 @@ export async function saveDailyPredictionAction(input: DailyPredictionInput): Pr
     const em = await withDbRetry(() =>
       prisma.eveningMatch.findUnique({
         where: { id: input.eveningMatchId },
-        include: { match: { select: { kickoffUtc: true } } },
+        include: { match: { select: { kickoffUtc: true, status: true } } },
       }),
     );
     if (!em) return { ok: false, error: "not_found" };
@@ -104,7 +104,10 @@ export async function saveDailyPredictionAction(input: DailyPredictionInput): Pr
     );
     if (!checkin) return { ok: false, error: "not_checked_in" };
 
-    if (!isMatchEditable(em.match.kickoffUtc, Date.now(), null)) return { ok: false, error: "locked" };
+    // Lock once the match has started: kicked off OR no longer SCHEDULED (status
+    // is authoritative — a finished match must not stay predictable even if its
+    // stored kickoff time is still in the future).
+    if (!isDagspelOpen(em.match.kickoffUtc, em.match.status, Date.now())) return { ok: false, error: "locked" };
 
     const fhh = parseHalfGoals(input.firstHalfHome);
     const fha = parseHalfGoals(input.firstHalfAway);
