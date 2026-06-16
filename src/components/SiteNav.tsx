@@ -6,6 +6,7 @@ const LINKS: { href: string; label: string }[] = [
   { href: "/", label: "Overzicht" },
   { href: "/voorspellen", label: "Voorspellen" },
   { href: "/klassement", label: "Klassement" },
+  { href: "/win", label: "Win" },
   { href: "/scenarios", label: "Scenario's" },
 ];
 
