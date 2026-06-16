@@ -23,6 +23,16 @@ export function fmtTimeAms(d: Date | string): string {
   }).format(typeof d === "string" ? new Date(d) : d);
 }
 
+/** e.g. "zo 14 jun" — Dutch date only, Amsterdam time. */
+export function fmtDateAms(d: Date | string): string {
+  return new Intl.DateTimeFormat("nl-NL", {
+    timeZone: AMS,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(typeof d === "string" ? new Date(d) : d);
+}
+
 /** "x sec/min/uur geleden" for the "laatst bijgewerkt" label. */
 export function fmtRelativeNl(d: Date | string | null): string {
   if (!d) return "nog niet";

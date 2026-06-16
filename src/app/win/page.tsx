@@ -4,6 +4,7 @@
 // elk onderdeel (PRIJZENPOULE-PLAN.md §10).
 import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
+import { TeamCrest } from "@/components/TeamCrest";
 import { currentParticipant } from "@/lib/participant-auth";
 import {
   loadWinData,
@@ -12,11 +13,14 @@ import {
   loadHoofdprijzen,
   type WinData,
   type PrizeTexts,
+  type RankedPerson,
+  type WinnerDagspel,
   type FrozenEveningWinners,
   type HoofdprijzenData,
 } from "@/lib/prijzenpoule-data";
 import { DAILY_SCORING } from "@/config/prize-scoring";
 import { isDagspelOpen } from "@/lib/predictions-validate";
+import { fmtDateAms } from "@/lib/format";
 import { CheckInForm } from "@/components/win/CheckInForm";
 import { DailyPredictionForm } from "@/components/win/DailyPredictionForm";
 
@@ -101,7 +105,7 @@ function TonightBlock({ data, prizes }: { data: WinData; prizes: PrizeTexts }) {
         Vanavond: <strong>{evening.label}</strong>
       </p>
       {!data.checkedIn ? <CheckInBlock prizes={prizes} /> : <CheckedInBlock data={data} prizes={prizes} />}
-      <AttendeesBlock names={data.checkedInNames} />
+      <StrijdersBlock attendees={data.attendees} />
     </>
   );
 }
@@ -117,8 +121,11 @@ function WinnersSection({
 }) {
   return (
     <section className="mt-8">
-      <h2 className="mb-1 text-lg font-extrabold">Winnaars</h2>
-      <p className="mb-3 text-[12px] text-brand-ink/55">
+      <h2 className="mb-1 flex items-center gap-2 text-lg font-extrabold">
+        <TrophyIcon className="h-5 w-5 text-brand-accent" />
+        Winnaars
+      </h2>
+      <p className="mb-4 text-[12px] text-brand-ink/55">
         Per afgesloten avond: de dagwinnaar (beste voorspelling) en de Lucky Loser (verloot onder alle
         aanwezigen).
       </p>
@@ -128,34 +135,27 @@ function WinnersSection({
           Nog geen afgesloten avonden. Na elke avond verschijnen hier de winnaars.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <div className="divide-y divide-brand-ink/10 overflow-hidden rounded-2xl border border-brand-ink/10 bg-white shadow-sm">
           {winners.map((w) => (
-            <li key={w.id} className="rounded-xl border border-brand-ink/15 bg-white p-3">
-              <p className="text-sm font-semibold">{w.label}</p>
-              <ul className="mt-1 space-y-0.5 text-[12px]">
+            <article key={w.id} className="p-4 sm:p-5">
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-accent">{w.label}</p>
+                {w.dagspellen[0] && (
+                  <p className="shrink-0 text-[11px] text-brand-ink/45">{fmtDateAms(w.dagspellen[0].kickoffIso)}</p>
+                )}
+              </div>
+              <div className="space-y-4">
                 {w.dagspellen.map((d, i) => (
-                  <li key={i}>
-                    <span className="text-brand-ink/55">{d.matchLabel}:</span>{" "}
-                    {d.winnerNames.length ? (
-                      <strong>
-                        {d.winnerNames.join(", ")}
-                        {d.winnerNames.length > 1 ? ` (gedeeld door ${d.winnerNames.length})` : ""}
-                      </strong>
-                    ) : (
-                      <span className="text-brand-ink/45">geen dagwinnaar</span>
-                    )}{" "}
-                    <span className="text-brand-ink/45">— {prizes.daywinner}</span>
-                  </li>
+                  <div key={i} className="space-y-2.5">
+                    <MatchHeadline d={d} />
+                    <DagwinnaarBlock winners={d.winners} prize={prizes.daywinner} />
+                  </div>
                 ))}
-                <li>
-                  <span className="text-brand-ink/55">Lucky Loser:</span>{" "}
-                  <strong>{w.luckyLoserName ?? "—"}</strong>{" "}
-                  <span className="text-brand-ink/45">— {prizes.luckyLoser}</span>
-                </li>
-              </ul>
-            </li>
+                <LuckyLoserBlock person={w.luckyLoser} prize={prizes.luckyLoser} />
+              </div>
+            </article>
           ))}
-        </ul>
+        </div>
       )}
 
       {/* Hoofdprijzen eindblok */}
@@ -185,24 +185,144 @@ function WinnersSection({
   );
 }
 
-function AttendeesBlock({ names }: { names: string[] }) {
+/** Eye-catcher per dagspel: crests, the big scoreboard result, the date. */
+function MatchHeadline({ d }: { d: WinnerDagspel }) {
+  return (
+    <div className="rounded-xl bg-gradient-to-r from-brand-olive/10 via-white to-wk-orange/10 px-3 py-3 ring-1 ring-brand-ink/5">
+      <div className="flex items-center justify-center gap-2 sm:gap-3">
+        <span className="flex flex-1 items-center justify-end gap-2 text-right text-sm font-bold leading-tight">
+          <span className="truncate">{d.homeName}</span>
+          <TeamCrest src={d.homeCrest} code={d.homeCode} />
+        </span>
+        <span className="shrink-0 rounded-lg bg-brand-ink px-3 py-1 text-xl font-extrabold tabular text-white shadow-sm">
+          {d.finished ? `${d.homeScore} – ${d.awayScore}` : "–"}
+        </span>
+        <span className="flex flex-1 items-center gap-2 text-left text-sm font-bold leading-tight">
+          <TeamCrest src={d.awayCrest} code={d.awayCode} />
+          <span className="truncate">{d.awayName}</span>
+        </span>
+      </div>
+      <p className="mt-2 text-center text-[11px] text-brand-ink/50">{fmtDateAms(d.kickoffIso)}</p>
+    </div>
+  );
+}
+
+function DagwinnaarBlock({ winners, prize }: { winners: RankedPerson[]; prize: string }) {
+  const shared = winners.length > 1;
+  return (
+    <div className="rounded-xl border border-green-700/15 bg-green-50/70 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <TrophyIcon className="h-4 w-4 text-green-700" />
+        <span className="text-[11px] font-bold uppercase tracking-wide text-green-800">
+          Dagwinnaar{shared ? "s" : ""}
+        </span>
+        <span className="ml-auto text-right text-[11px] font-medium text-brand-ink/60">{prize}</span>
+      </div>
+      {winners.length === 0 ? (
+        <p className="mt-1.5 text-sm text-brand-ink/45">Geen dagwinnaar deze avond.</p>
+      ) : (
+        <ul className="mt-1.5 space-y-1">
+          {winners.map((p) => (
+            <li key={p.nickname} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <strong>{p.nickname}</strong>
+              <RankPill p={p} />
+            </li>
+          ))}
+          {shared && <li className="text-[11px] text-brand-ink/45">gedeeld door {winners.length}</li>}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function LuckyLoserBlock({ person, prize }: { person: RankedPerson | null; prize: string }) {
+  return (
+    <div className="rounded-xl border border-brand-copper/25 bg-brand-copper/[0.07] px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <SparkleIcon className="h-4 w-4 text-brand-copper" />
+        <span className="text-[11px] font-bold uppercase tracking-wide text-brand-copper">Lucky Loser</span>
+        <span className="ml-auto text-right text-[11px] font-medium text-brand-ink/60">{prize}</span>
+      </div>
+      {person ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <strong>{person.nickname}</strong>
+          <RankPill p={person} />
+        </div>
+      ) : (
+        <p className="mt-1.5 text-sm text-brand-ink/45">—</p>
+      )}
+    </div>
+  );
+}
+
+/** "3e · 24 ptn", or a tidy fallback for someone without a leaderboard score. */
+function rankLabel(p: RankedPerson): string {
+  if (p.rank == null || p.points == null) return "nog geen punten";
+  return `${p.rank}e · ${p.points} ptn`;
+}
+
+function RankPill({ p }: { p: RankedPerson }) {
+  return (
+    <span className="rounded-full bg-brand-ink/5 px-2 py-0.5 text-[11px] text-brand-ink/60">{rankLabel(p)}</span>
+  );
+}
+
+function StrijdersBlock({ attendees }: { attendees: RankedPerson[] }) {
   return (
     <section className="mt-6">
-      <h2 className="mb-2 text-sm font-semibold">Wie is er vanavond ({names.length})</h2>
-      {names.length === 0 ? (
+      <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        <ShieldIcon className="h-4 w-4 text-brand-accent" />
+        De strijders van vandaag ({attendees.length})
+      </h2>
+      {attendees.length === 0 ? (
         <p className="rounded-lg border border-dashed border-brand-ink/20 p-3 text-center text-[12px] text-brand-ink/55">
           Nog niemand ingecheckt — wees de eerste!
         </p>
       ) : (
         <ul className="flex flex-wrap gap-1.5">
-          {names.map((n) => (
-            <li key={n} className="rounded-full bg-wk-field/10 px-2.5 py-1 text-[12px] font-medium text-brand-ink/80">
-              {n}
+          {attendees.map((a) => (
+            <li
+              key={a.nickname}
+              className="flex items-center gap-1.5 rounded-full bg-wk-field/10 px-2.5 py-1 text-[12px]"
+            >
+              <span className="font-semibold text-brand-ink/80">{a.nickname}</span>
+              <span className="text-brand-ink/25" aria-hidden>
+                •
+              </span>
+              <span className="text-brand-ink/55">{rankLabel(a)}</span>
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+// --- Inline icons (single-colour via currentColor) -------------------------
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M12 2 4 5v6c0 5 3.4 8.6 8 11 4.6-2.4 8-6 8-11V5l-8-3z" />
+    </svg>
+  );
+}
+
+function TrophyIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M7 4h10v4a5 5 0 0 1-10 0V4z" />
+      <path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3M12 13v4M8 21h8M10 21v-2h4v2" />
+    </svg>
+  );
+}
+
+function SparkleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z" />
+      <path d="M19 14l.85 2.4L22.5 17l-2.65.85L19 20.5l-.85-2.65L15.5 17l2.65-.6L19 14z" opacity="0.65" />
+    </svg>
   );
 }
 

@@ -41,6 +41,30 @@ export async function getActiveEvening() {
   return prisma.evening.findFirst({ where: { isActive: true } });
 }
 
+/** A person shown with their standing from the EXISTING leaderboard (read-only).
+ *  rank/points are null when the participant has no score yet. */
+export interface RankedPerson {
+  nickname: string;
+  rank: number | null;
+  points: number | null;
+}
+
+/** rank + total points per participantId, from loadKlassement (poule scoring read
+ *  unchanged). Participants without a score row are simply absent (-> null). */
+async function loadRankLookup(): Promise<Map<string, { rank: number; points: number }>> {
+  const k = await loadKlassement();
+  return new Map(k.entries.map((e) => [e.participantId, { rank: e.rank, points: e.pointsTotal }]));
+}
+
+function toRanked(
+  participantId: string,
+  nickname: string,
+  lookup: Map<string, { rank: number; points: number }>,
+): RankedPerson {
+  const r = lookup.get(participantId);
+  return { nickname, rank: r?.rank ?? null, points: r?.points ?? null };
+}
+
 export interface WinDagspel {
   eveningMatchId: string;
   ordinal: number;
@@ -65,7 +89,7 @@ export interface DailyPredictionValues {
 export interface WinData {
   evening: { id: string; label: string; pollOpen: boolean; hasCode: boolean } | null;
   checkedIn: boolean;
-  checkedInNames: string[]; // bijnamen of everyone checked in tonight (public, social)
+  attendees: RankedPerson[]; // everyone checked in tonight, with leaderboard standing
   dagspellen: WinDagspel[];
   existing: Record<string, DailyPredictionValues>; // eveningMatchId -> saved prediction
 }
@@ -73,9 +97,9 @@ export interface WinData {
 /** Everything /win needs for the active evening + this participant. */
 export async function loadWinData(participantId: string): Promise<WinData> {
   const evening = await getActiveEvening();
-  if (!evening) return { evening: null, checkedIn: false, checkedInNames: [], dagspellen: [], existing: {} };
+  if (!evening) return { evening: null, checkedIn: false, attendees: [], dagspellen: [], existing: {} };
 
-  const [checkin, eveningMatches, preds, allCheckins] = await Promise.all([
+  const [checkin, eveningMatches, preds, allCheckins, rankLookup] = await Promise.all([
     prisma.checkin.findUnique({
       where: { eveningId_participantId: { eveningId: evening.id, participantId } },
       select: { id: true },
@@ -98,8 +122,9 @@ export async function loadWinData(participantId: string): Promise<WinData> {
     prisma.checkin.findMany({
       where: { eveningId: evening.id },
       orderBy: { createdAt: "asc" },
-      select: { participant: { select: { nickname: true } } },
+      select: { participantId: true, participant: { select: { nickname: true } } },
     }),
+    loadRankLookup(),
   ]);
 
   const existing: Record<string, DailyPredictionValues> = Object.fromEntries(
@@ -131,7 +156,7 @@ export async function loadWinData(participantId: string): Promise<WinData> {
   return {
     evening: { id: evening.id, label: evening.label, pollOpen: evening.pollOpen, hasCode: !!evening.checkInCode },
     checkedIn: !!checkin,
-    checkedInNames: allCheckins.map((c) => c.participant.nickname),
+    attendees: allCheckins.map((c) => toRanked(c.participantId, c.participant.nickname, rankLookup)),
     dagspellen,
     existing,
   };
@@ -269,8 +294,17 @@ export async function loadEveningForFreeze(eveningId: string): Promise<EveningFr
 }
 
 export interface WinnerDagspel {
-  matchLabel: string;
-  winnerNames: string[]; // stored DailyWinner -> bijnamen (gedeeld bij meerdere)
+  homeName: string;
+  awayName: string;
+  homeCode: string;
+  awayCode: string;
+  homeCrest: string | null;
+  awayCrest: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  kickoffIso: string;
+  finished: boolean; // FINISHED with a stored scoreline -> show the result
+  winners: RankedPerson[]; // stored DailyWinner(s), with leaderboard standing
 }
 
 export interface FrozenEveningWinners {
@@ -278,35 +312,52 @@ export interface FrozenEveningWinners {
   label: string;
   frozenAtIso: string;
   dagspellen: WinnerDagspel[];
-  luckyLoserName: string | null;
+  luckyLoser: RankedPerson | null;
 }
 
-/** Frozen (afgesloten) evenings with their STORED winners — the public overview. */
+/** Frozen (afgesloten) evenings with their STORED winners — the public overview.
+ *  Each dagspel carries the match (crests + result + date); winners + the Lucky
+ *  Loser carry their standing from the existing leaderboard. */
 export async function loadWinnersOverview(): Promise<FrozenEveningWinners[]> {
-  const evenings = await prisma.evening.findMany({
-    where: { winnersFrozenAt: { not: null } },
-    orderBy: { winnersFrozenAt: "desc" },
-    include: {
-      luckyLoser: { select: { nickname: true } },
-      matches: {
-        orderBy: { ordinal: "asc" },
-        include: {
-          match: { include: { homeTeam: true, awayTeam: true } },
-          winners: { include: { participant: { select: { nickname: true } } } },
+  const [evenings, rankLookup] = await Promise.all([
+    prisma.evening.findMany({
+      where: { winnersFrozenAt: { not: null } },
+      orderBy: { winnersFrozenAt: "desc" },
+      include: {
+        luckyLoser: { select: { id: true, nickname: true } },
+        matches: {
+          orderBy: { ordinal: "asc" },
+          include: {
+            match: { include: { homeTeam: true, awayTeam: true } },
+            winners: { include: { participant: { select: { id: true, nickname: true } } } },
+          },
         },
       },
-    },
-  });
+    }),
+    loadRankLookup(),
+  ]);
 
   return evenings.map((e) => ({
     id: e.id,
     label: e.label,
     frozenAtIso: e.winnersFrozenAt!.toISOString(),
-    luckyLoserName: e.luckyLoser?.nickname ?? null,
-    dagspellen: e.matches.map((em) => ({
-      matchLabel: `${em.match.homeTeam?.nameNl ?? "?"} – ${em.match.awayTeam?.nameNl ?? "?"}`,
-      winnerNames: em.winners.map((w) => w.participant.nickname),
-    })),
+    luckyLoser: e.luckyLoser ? toRanked(e.luckyLoser.id, e.luckyLoser.nickname, rankLookup) : null,
+    dagspellen: e.matches.map((em) => {
+      const m = em.match;
+      return {
+        homeName: m.homeTeam?.nameNl ?? "?",
+        awayName: m.awayTeam?.nameNl ?? "?",
+        homeCode: m.homeTeam?.fifaCode ?? "?",
+        awayCode: m.awayTeam?.fifaCode ?? "?",
+        homeCrest: m.homeTeam?.crestUrl ?? null,
+        awayCrest: m.awayTeam?.crestUrl ?? null,
+        homeScore: m.homeScore,
+        awayScore: m.awayScore,
+        kickoffIso: m.kickoffUtc.toISOString(),
+        finished: m.status === "FINISHED" && m.homeScore != null && m.awayScore != null,
+        winners: em.winners.map((w) => toRanked(w.participant.id, w.participant.nickname, rankLookup)),
+      };
+    }),
   }));
 }
 
