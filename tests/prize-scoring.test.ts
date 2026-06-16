@@ -4,9 +4,11 @@ import {
   determineDagwinnaars,
   drawLuckyLoser,
   computeEveningWinners,
+  winnersDiverged,
   assignHoofdprijzen,
   type DailyPrediction,
   type DailyActual,
+  type EveningWinners,
 } from "../src/lib/prize-scoring";
 import { DAILY_MAX } from "../src/config/prize-scoring";
 
@@ -154,6 +156,30 @@ describe("computeEveningWinners", () => {
       matches: [{ eveningMatchId: "em1", actual: null, entries: [{ participantId: "a", pred: perfect }] }],
     });
     expect(res.perMatch[0]).toMatchObject({ winnerIds: [], scoreable: false });
+  });
+});
+
+describe("winnersDiverged", () => {
+  const live: EveningWinners = {
+    perMatch: [{ eveningMatchId: "em1", winnerIds: ["a"], score: 9, scoreable: true }],
+    luckyLoserId: "b",
+  };
+
+  it("is false when stored equals the current computation", () => {
+    expect(winnersDiverged({ perMatch: [{ eveningMatchId: "em1", winnerIds: ["a"] }], luckyLoserId: "b" }, live)).toBe(false);
+  });
+
+  it("is false regardless of winner-id order within a dagspel", () => {
+    const live2: EveningWinners = { perMatch: [{ eveningMatchId: "em1", winnerIds: ["a", "c"], score: 9, scoreable: true }], luckyLoserId: "b" };
+    expect(winnersDiverged({ perMatch: [{ eveningMatchId: "em1", winnerIds: ["c", "a"] }], luckyLoserId: "b" }, live2)).toBe(false);
+  });
+
+  it("is true when a dagwinnaar differs (result edited after freezing)", () => {
+    expect(winnersDiverged({ perMatch: [{ eveningMatchId: "em1", winnerIds: ["x"] }], luckyLoserId: "b" }, live)).toBe(true);
+  });
+
+  it("is true when the Lucky Loser differs", () => {
+    expect(winnersDiverged({ perMatch: [{ eveningMatchId: "em1", winnerIds: ["a"] }], luckyLoserId: "z" }, live)).toBe(true);
   });
 });
 
