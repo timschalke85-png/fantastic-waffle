@@ -17,6 +17,7 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 import { getAdapter } from "../src/lib/adapters";
 import { assignBracketSlots } from "../src/lib/bracket";
+import { buildMatchUpsert } from "./seed-match";
 import { NAME_NL } from "./data/name-nl";
 import {
   R32_SLOTS,
@@ -65,32 +66,29 @@ async function main() {
 
   // --- (a) matches ---
   const slots = assignBracketSlots(snap.matches);
+  // Respect manual overrides: load the current override flags so a re-seed keeps
+  // an admin-corrected result/status (buildMatchUpsert skips the result fields
+  // for these rows). Without this the API snapshot would clobber them.
+  const existingMatches = await prisma.match.findMany({
+    select: { apiMatchId: true, manuallyOverridden: true },
+  });
+  const overriddenApiIds = new Set(
+    existingMatches.filter((e) => e.manuallyOverridden).map((e) => e.apiMatchId),
+  );
   let matchCount = 0;
   for (const m of snap.matches) {
     const homeTeamId = m.homeApiTeamId != null ? teamIdByApiId.get(m.homeApiTeamId) ?? null : null;
     const awayTeamId = m.awayApiTeamId != null ? teamIdByApiId.get(m.awayApiTeamId) ?? null : null;
     const penaltyWinnerTeamId =
       m.penaltyWinnerApiTeamId != null ? teamIdByApiId.get(m.penaltyWinnerApiTeamId) ?? null : null;
-    const data = {
-      stage: m.stage,
-      groupLetter: m.groupLetter,
-      bracketSlot: slots.get(m.apiMatchId) ?? null,
+    const { create, update } = buildMatchUpsert(m, {
       homeTeamId,
       awayTeamId,
-      kickoffUtc: new Date(m.kickoffUtc),
-      venue: m.venue,
-      status: m.status,
-      homeScore: m.homeScore,
-      awayScore: m.awayScore,
-      wentToExtraTime: m.wentToExtraTime,
       penaltyWinnerTeamId,
-    } satisfies Prisma.MatchUncheckedUpdateInput;
-    await prisma.match.upsert({
-      where: { apiMatchId: m.apiMatchId },
-      create: { apiMatchId: m.apiMatchId, ...data } as Prisma.MatchUncheckedCreateInput,
-      // never clobber a manually overridden result with API data
-      update: { ...data },
+      bracketSlot: slots.get(m.apiMatchId) ?? null,
+      overridden: overriddenApiIds.has(m.apiMatchId),
     });
+    await prisma.match.upsert({ where: { apiMatchId: m.apiMatchId }, create, update });
     matchCount++;
   }
   console.log(`Matches upserted: ${matchCount}`);
