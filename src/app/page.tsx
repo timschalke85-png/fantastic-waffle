@@ -13,7 +13,7 @@ import { TodayBoard } from "@/components/TodayBoard";
 import { FavoritesBlock } from "@/components/FavoritesBlock";
 import { loadFavorites } from "@/lib/favorites-data";
 import { MatchCard } from "@/components/MatchCard";
-import { PrizeTeaser } from "@/components/PrizeTeaser"; // TEMP: remove when prizes launch
+import { WinCta } from "@/components/WinCta";
 
 export const dynamic = "force-dynamic";
 
@@ -77,8 +77,8 @@ export default async function Overzicht() {
         </div>
       </header>
 
-      {/* TEMP: prize-system teaser (remove when the real prize feature ships). */}
-      <PrizeTeaser />
+      {/* Prijzenpoule call-to-action → /win. */}
+      <WinCta />
 
       {/* Vandaag — live scoreboard of all of today's matches, prominent on matchdays. */}
       <TodayBoard matches={d.today} lastFetchUtc={d.lastFetchUtc} />
