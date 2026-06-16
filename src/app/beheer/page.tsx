@@ -4,9 +4,9 @@ import { getSettings } from "@/lib/settings";
 import { loadParticipantsAdmin } from "@/lib/participants-admin";
 import {
   loadEveningsAdmin,
-  loadEveningWinnersPreview,
+  loadEveningWinnersView,
   type AdminEveningRow,
-  type EveningWinnersPreview,
+  type EveningWinnersView,
 } from "@/lib/prijzenpoule-data";
 import { fmtDateTimeAms, fmtRelativeNl } from "@/lib/format";
 import {
@@ -27,6 +27,7 @@ import {
   togglePollAction,
   updatePrizeTextsAction,
   freezeEveningAction,
+  reopenEveningAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -47,11 +48,11 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
     loadEveningsAdmin(),
   ]);
 
-  // Live winner previews per evening (for the freeze section).
-  const previewEntries = await Promise.all(
-    evenings.map(async (e) => [e.id, await loadEveningWinnersPreview(e.id)] as const),
+  // Winners per evening: live preview before freezing, stored values after.
+  const viewEntries = await Promise.all(
+    evenings.map(async (e) => [e.id, await loadEveningWinnersView(e.id)] as const),
   );
-  const previews: Record<string, EveningWinnersPreview | null> = Object.fromEntries(previewEntries);
+  const winnerViews: Record<string, EveningWinnersView | null> = Object.fromEntries(viewEntries);
 
   // Readable options for assigning a broadcast match to an evening (real matches only).
   const matchOptions = matches.map((m) => ({
@@ -72,6 +73,7 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
   // Two-step delete confirmation: ?confirmDelete=<id> shows a confirm block with
   // the real bijnaam before the irreversible action.
   const confirmTarget = sp.confirmDelete ? participants.find((p) => p.id === sp.confirmDelete) : undefined;
+  const confirmReopenTarget = sp.confirmReopen ? evenings.find((e) => e.id === sp.confirmReopen) : undefined;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6">
@@ -102,6 +104,30 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
       {sp.error === "evening_label" && <Banner>Geef de avond een label.</Banner>}
       {sp.error === "evening_matches" && <Banner>Kies 1 of 2 wedstrijden voor de avond.</Banner>}
       {sp.saved === "frozen" && <Banner>Avond afgesloten — winnaars vastgelegd.</Banner>}
+      {sp.saved === "reopened" && (
+        <Banner>Avond heropend — corrigeer de uitslag en sluit opnieuw af.</Banner>
+      )}
+
+      {confirmReopenTarget && (
+        <div className="mb-4 rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-800">Avond heropenen?</p>
+          <p className="mt-1 text-[13px] text-amber-700">
+            Hiermee wis je de vastgelegde winnaars van <strong>{confirmReopenTarget.label}</strong>{" "}
+            (dagwinnaars + Lucky Loser). Je kunt daarna de uitslag corrigeren en de avond opnieuw afsluiten.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <form action={reopenEveningAction}>
+              <input type="hidden" name="eveningId" value={confirmReopenTarget.id} />
+              <button className="rounded bg-amber-600 px-3 py-2 text-sm font-semibold text-white">
+                Ja, heropenen
+              </button>
+            </form>
+            <a href="/beheer" className="rounded border px-3 py-2 text-sm">
+              Annuleren
+            </a>
+          </div>
+        </div>
+      )}
       {sp.error === "ruststand" && (
         <Banner>Onmogelijke ruststand: een team kan bij rust niet meer goals hebben dan aan het eind.</Banner>
       )}
@@ -318,7 +344,7 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         ) : (
           <div className="space-y-3">
             {evenings.map((e) => (
-              <EveningCard key={e.id} e={e} matchOptions={matchOptions} preview={previews[e.id]} />
+              <EveningCard key={e.id} e={e} matchOptions={matchOptions} view={winnerViews[e.id]} />
             ))}
           </div>
         )}
@@ -485,11 +511,11 @@ function MatchSelect({ defaultValue, options }: { defaultValue: string; options:
 function EveningCard({
   e,
   matchOptions,
-  preview,
+  view,
 }: {
   e: AdminEveningRow;
   matchOptions: { id: string; label: string }[];
-  preview: EveningWinnersPreview | null;
+  view: EveningWinnersView | null;
 }) {
   const slot1 = e.dagspellen[0]?.matchId ?? "";
   const slot2 = e.dagspellen[1]?.matchId ?? "";
@@ -571,18 +597,24 @@ function EveningCard({
         )}
       </form>
 
-      {/* Winnaars + afsluiten (freeze) */}
-      {preview?.hasMatches && (
+      {/* Winnaars + afsluiten (freeze) / heropenen */}
+      {view?.hasMatches && (
         <div className="mt-3 border-t pt-3">
           <p className="mb-1.5 text-xs font-medium text-brand-ink/70">
-            Winnaars{preview.frozen ? " (vastgelegd)" : preview.allFinished ? " (voorlopig)" : ""}:
+            Winnaars{view.frozen ? " (vastgelegd)" : view.allFinished ? " (voorlopig)" : ""}:
           </p>
-          {!preview.allFinished && !preview.frozen ? (
+          {!view.allFinished && !view.frozen ? (
             <p className="text-[11px] text-brand-ink/55">Wedstrijd(en) nog niet afgelopen — afsluiten kan straks.</p>
           ) : (
             <>
+              {view.diverged && (
+                <p className="mb-1.5 rounded bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">
+                  ⚠ De uitslag is ná het afsluiten gewijzigd — de vastgelegde winnaars wijken af van de huidige
+                  uitslag. Heropen om opnieuw vast te leggen.
+                </p>
+              )}
               <ul className="space-y-0.5 text-[12px]">
-                {preview.perMatch.map((pm, i) => (
+                {view.perMatch.map((pm, i) => (
                   <li key={i}>
                     <span className="text-brand-ink/55">{pm.matchLabel}:</span>{" "}
                     {!pm.scoreable ? (
@@ -599,11 +631,16 @@ function EveningCard({
                 ))}
                 <li>
                   <span className="text-brand-ink/55">Lucky Loser:</span>{" "}
-                  <strong>{preview.luckyLoserName ?? "—"}</strong>
+                  <strong>{view.luckyLoserName ?? "—"}</strong>
                 </li>
               </ul>
-              {preview.frozen ? (
-                <p className="mt-2 text-[11px] font-medium text-green-700">Afgesloten ✓ — vastgelegd</p>
+              {view.frozen ? (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <span className="text-[11px] font-medium text-green-700">Afgesloten ✓ — vastgelegd</span>
+                  <a href={`/beheer?confirmReopen=${e.id}`} className="text-[11px] text-amber-700 underline">
+                    Heropenen &amp; opnieuw vastleggen
+                  </a>
+                </div>
               ) : (
                 <form action={freezeEveningAction} className="mt-2">
                   <input type="hidden" name="eveningId" value={e.id} />
