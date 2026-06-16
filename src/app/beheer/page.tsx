@@ -9,6 +9,7 @@ import {
   type EveningWinnersView,
 } from "@/lib/prijzenpoule-data";
 import { fmtDateTimeAms, fmtRelativeNl } from "@/lib/format";
+import { POLL_ENABLED } from "@/config/features";
 import {
   loginAction,
   logoutAction,
@@ -504,7 +505,7 @@ function EveningCard({
           {e.isActive && (
             <span className="rounded-full bg-green-100 px-2 py-0.5 font-medium text-green-800">Actief — vanavond</span>
           )}
-          {e.pollOpen && (
+          {POLL_ENABLED && e.pollOpen && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">Poll open</span>
           )}
           <span className="text-brand-ink/55">{e.checkinCount} ingecheckt</span>
@@ -548,12 +549,14 @@ function EveningCard({
           </form>
         )}
 
-        {/* Poll */}
-        <form action={togglePollAction}>
-          <input type="hidden" name="eveningId" value={e.id} />
-          <input type="hidden" name="open" value={(!e.pollOpen).toString()} />
-          <button className="rounded border px-2.5 py-2 text-xs">{e.pollOpen ? "Poll sluiten" : "Poll openen"}</button>
-        </form>
+        {/* Poll — hidden until the vote UI + outcome logic are built (POLL_ENABLED). */}
+        {POLL_ENABLED && (
+          <form action={togglePollAction}>
+            <input type="hidden" name="eveningId" value={e.id} />
+            <input type="hidden" name="open" value={(!e.pollOpen).toString()} />
+            <button className="rounded border px-2.5 py-2 text-xs">{e.pollOpen ? "Poll sluiten" : "Poll openen"}</button>
+          </form>
+        )}
       </div>
 
       {/* Uitgezonden wedstrijd(en) = de dagspellen */}
