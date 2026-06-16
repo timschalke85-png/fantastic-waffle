@@ -3,6 +3,7 @@
 // avondprijzen. Losse module; gebruikt loadWinData. Uitleg staat zichtbaar bij
 // elk onderdeel (PRIJZENPOULE-PLAN.md §10).
 import Link from "next/link";
+import { BrandLogo } from "@/components/BrandLogo";
 import { currentParticipant } from "@/lib/participant-auth";
 import {
   loadWinData,
@@ -26,9 +27,22 @@ export default async function WinPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
       <header className="mb-5">
-        <p className="text-xs uppercase tracking-wide text-brand-accent">Hotel van Saaze</p>
-        <h1 className="text-2xl font-bold leading-tight">Win bij Van Saaze</h1>
-        <p className="mt-1 text-sm text-brand-ink/60">
+        {/* Branded strip, consistent with the Overzicht hero (olive chrome + logo chip). */}
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-brand-olive px-4 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex shrink-0 items-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
+              <BrandLogo className="h-8 w-auto" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-white/70">Hotel van Saaze</p>
+              <h1 className="text-lg font-bold leading-tight">Win bij Van Saaze</h1>
+            </div>
+          </div>
+          <span className="shrink-0 text-2xl" aria-hidden>
+            🏆
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-brand-ink/60">
           Kom kijken in het restaurant, check in en speel mee voor de avondprijzen.
         </p>
       </header>
