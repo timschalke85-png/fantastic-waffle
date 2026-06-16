@@ -126,6 +126,16 @@ describe("updateMatchAction (status only written when changed)", () => {
     const call = prisma.match.update.mock.calls[0][0];
     expect(call.data).toMatchObject({ status: "FINISHED", manuallyOverridden: true });
   });
+
+  it("saves the match status independently of any evening (BUG 1: no coupling)", async () => {
+    // Setting a match to FINISHED must never depend on an evening being closed
+    // first — the save path touches only the match, no evening lookup/write.
+    await updateMatchAction(fd({ matchId: "m1", status: "FINISHED", originalStatus: "SCHEDULED", homeScore: "1", awayScore: "0" }));
+    expect(prisma.match.update).toHaveBeenCalledTimes(1);
+    expect(prisma.match.update.mock.calls[0][0].data).toMatchObject({ status: "FINISHED", manuallyOverridden: true });
+    expect(prisma.evening.update).not.toHaveBeenCalled();
+    expect(prisma.evening.updateMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("prijzenpoule avond-beheer", () => {
