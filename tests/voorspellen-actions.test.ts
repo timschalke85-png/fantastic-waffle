@@ -264,6 +264,24 @@ describe("saveKnockoutPickAction", () => {
     expect(res).toEqual({ ok: false, error: "slot" });
   });
 
+  // Regression: the old regex used 8[0-8], silently rejecting slot 89 — the FIRST
+  // R16 match — so every 1/8-finale autosave that touched it failed with "slot".
+  // 90–104 matched by luck, which is why only 1/8 broke. Cover the whole range +
+  // both boundaries (89 and the round starts 97/101/103) so no gap recurs.
+  it("accepts every valid bracket slot 73–104 (incl. 89, the old regex gap)", async () => {
+    for (const slot of ["73", "88", "89", "90", "96", "97", "100", "101", "104"]) {
+      const res = await saveKnockoutPickAction([pick({ bracketSlot: slot })]); // empty pick -> clear, ok
+      expect(res, `slot ${slot}`).toEqual({ ok: true });
+    }
+  });
+
+  it("still rejects slots outside 73–104", async () => {
+    for (const slot of ["72", "105", "0"]) {
+      const res = await saveKnockoutPickAction([pick({ bracketSlot: slot })]);
+      expect(res, `slot ${slot}`).toEqual({ ok: false, error: "slot" });
+    }
+  });
+
   // Requirement 1: an upstream winner change cascades — inconsistent downstream
   // picks are dropped (whole prediction, score included).
   it("drops a downstream pick made inconsistent by an upstream winner change", async () => {

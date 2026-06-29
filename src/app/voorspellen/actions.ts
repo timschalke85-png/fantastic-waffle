@@ -206,7 +206,7 @@ export interface KnockoutPickInput {
   awayTeamId?: string;
 }
 
-const KO_SLOT_RE = /^(7[3-9]|8[0-8]|9[0-9]|10[0-4])$/; // 73..104
+const KO_SLOT_RE = /^(7[3-9]|8[0-9]|9[0-9]|10[0-4])$/; // 73..104 (8[0-9] incl. 89 — first R16 slot)
 
 /** Knockout guard: signed in, round open, and still before the knockout lock.
  *  All three are enforced server-side, independent of the UI (Fase 5 discipline). */
