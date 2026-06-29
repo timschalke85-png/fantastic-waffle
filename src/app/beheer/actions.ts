@@ -5,8 +5,10 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { signIn, signOut, isAdmin } from "@/lib/admin-auth";
 import { setSetting } from "@/lib/settings";
+import { amsterdamLocalToUtcIso } from "@/lib/datetime";
 import { refreshMatchData } from "@/lib/refresh";
 import { recomputeScores } from "@/lib/recompute";
+import { applyR32Resolution } from "@/lib/r32-apply";
 import { loadEveningForFreeze } from "@/lib/prijzenpoule-data";
 import { computeEveningWinners } from "@/lib/prize-scoring";
 import { withDbRetry, isTransientConnectionError } from "@/lib/db-retry";
@@ -135,23 +137,36 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const groupLock = String(formData.get("group_lock_utc") ?? "").trim();
   const groupFloor = String(formData.get("group_eligibility_floor_utc") ?? "").trim();
-  const knockoutLock = String(formData.get("knockout_lock_utc") ?? "").trim();
+  // The knockout lock is entered as an Amsterdam wall-clock time (datetime-local).
+  const knockoutLockLocal = String(formData.get("knockout_lock_local") ?? "").trim();
   const knockoutOpen = formData.get("knockout_open") === "on";
 
+  // Validate everything UP FRONT and report a clear error on a bad value. The old
+  // code silently dropped an unparseable date while still redirecting to
+  // "?saved=settings", so a mistyped lock looked saved but never persisted.
+  let groupLockIso: string | null = null;
+  if (groupLock) {
+    const d = new Date(groupLock);
+    if (Number.isNaN(d.getTime())) redirect("/beheer?error=group_lock_invalid");
+    groupLockIso = d.toISOString();
+  }
+  let groupFloorIso: string | null = null;
+  if (groupFloor) {
+    const d = new Date(groupFloor);
+    if (Number.isNaN(d.getTime())) redirect("/beheer?error=group_floor_invalid");
+    groupFloorIso = d.toISOString();
+  }
+  let knockoutLockIso: string | null = null;
+  if (knockoutLockLocal) {
+    knockoutLockIso = amsterdamLocalToUtcIso(knockoutLockLocal);
+    if (!knockoutLockIso) redirect("/beheer?error=ko_lock_invalid");
+  }
+
   await dbWrite(async () => {
-    if (groupLock) {
-      const d = new Date(groupLock);
-      if (!Number.isNaN(d.getTime())) await setSetting("group_lock_utc", d.toISOString());
-    }
-    if (groupFloor) {
-      const d = new Date(groupFloor);
-      if (!Number.isNaN(d.getTime())) await setSetting("group_eligibility_floor_utc", d.toISOString());
-    }
+    if (groupLockIso) await setSetting("group_lock_utc", groupLockIso);
+    if (groupFloorIso) await setSetting("group_eligibility_floor_utc", groupFloorIso);
     await setSetting("knockout_open", knockoutOpen ? "true" : "false");
-    if (knockoutLock) {
-      const d = new Date(knockoutLock);
-      if (!Number.isNaN(d.getTime())) await setSetting("knockout_lock_utc", d.toISOString());
-    }
+    if (knockoutLockIso) await setSetting("knockout_lock_utc", knockoutLockIso);
   });
   revalidatePath("/beheer");
   redirect("/beheer?saved=settings");
@@ -169,6 +184,22 @@ export async function setKnockoutLockFromR32Action(): Promise<void> {
   await dbWrite(() => setSetting("knockout_lock_utc", earliest.kickoffUtc.toISOString()));
   revalidatePath("/beheer");
   redirect("/beheer?saved=ko_lock");
+}
+
+/**
+ * Derive the R32 teams from the FINAL group standings and write them onto the R32
+ * matches. The provider never delivers knockout teams, so this is the path that
+ * makes the bracket (and the knockout picker) come alive. All-or-nothing and
+ * refuses while the group stage is unfinished — see applyR32Resolution.
+ */
+export async function resolveR32Action(): Promise<void> {
+  await requireAdmin();
+  const r = await dbWrite(() => applyR32Resolution());
+  revalidatePath("/beheer");
+  revalidatePath("/");
+  revalidatePath("/voorspellen");
+  if (r.ok) redirect(`/beheer?saved=r32&n=${r.written}`);
+  redirect(`/beheer?error=r32_${r.reason ?? "unknown"}`);
 }
 
 export async function forceRefreshAction(): Promise<void> {

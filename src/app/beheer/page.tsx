@@ -9,6 +9,7 @@ import {
   type EveningWinnersView,
 } from "@/lib/prijzenpoule-data";
 import { fmtDateTimeAms, fmtRelativeNl } from "@/lib/format";
+import { utcIsoToAmsterdamLocal } from "@/lib/datetime";
 import { POLL_ENABLED } from "@/config/features";
 import {
   loginAction,
@@ -17,6 +18,7 @@ import {
   clearOverrideAction,
   updateSettingsAction,
   setKnockoutLockFromR32Action,
+  resolveR32Action,
   deleteParticipantAction,
   forceRefreshAction,
   recomputeAction,
@@ -95,6 +97,15 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         </Banner>
       )}
       {sp.saved === "settings" && <Banner>Instellingen opgeslagen.</Banner>}
+      {sp.error === "ko_lock_invalid" && (
+        <Banner>Ongeldige knock-out lock datum/tijd — niets opgeslagen. Kies een geldige datum en tijd.</Banner>
+      )}
+      {sp.error === "group_lock_invalid" && (
+        <Banner>Ongeldige group lock (verwacht ISO, bv. 2026-06-20T17:00:00Z) — niets opgeslagen.</Banner>
+      )}
+      {sp.error === "group_floor_invalid" && (
+        <Banner>Ongeldige eligibiliteit-vloer (verwacht ISO) — niets opgeslagen.</Banner>
+      )}
       {sp.error === "db" && (
         <Banner>Opslaan mislukt — de database was even niet bereikbaar. Probeer het opnieuw.</Banner>
       )}
@@ -135,6 +146,18 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
       {sp.saved === "ko_lock" && <Banner>Knock-out lock gezet op de vroegste R32-aftrap.</Banner>}
       {sp.error === "no_r32" && (
         <Banner>Nog geen R32-wedstrijden in de data — knock-out lock niet gezet.</Banner>
+      )}
+      {sp.saved === "r32" && (
+        <Banner>R32-tegenstanders bepaald uit de eindstanden — {sp.n ?? "0"} wedstrijden ingevuld.</Banner>
+      )}
+      {sp.error === "r32_group_incomplete" && (
+        <Banner>Nog niet alle groepswedstrijden zijn afgelopen — de R32 kan nog niet bepaald worden.</Banner>
+      )}
+      {sp.error === "r32_unresolved" && (
+        <Banner>De R32 kon niet volledig uit de standen worden afgeleid (niet alle 16 wedstrijden rond).</Banner>
+      )}
+      {sp.error === "r32_no_r32_rows" && (
+        <Banner>Geen R32-wedstrijden in de data gevonden.</Banner>
       )}
       {sp.recompute === "noop" && (
         <Banner>Herbereken klassement: nog niet actief (komt in Fase 7).</Banner>
@@ -186,13 +209,19 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
             </span>
           </label>
           <label className="text-sm">
-            Knock-out lock (UTC, ISO)
+            Knock-out lock — datum &amp; tijd (Europe/Amsterdam)
             <input
-              name="knockout_lock_utc"
-              defaultValue={settings.knockout_lock_utc ?? ""}
-              placeholder="leeg = nog niet gezet"
-              className="mt-1 w-full rounded border px-2 py-1.5 font-mono text-sm"
+              type="datetime-local"
+              name="knockout_lock_local"
+              defaultValue={settings.knockout_lock_utc ? utcIsoToAmsterdamLocal(settings.knockout_lock_utc) : ""}
+              className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
             />
+            <span className="mt-1 block text-[11px] text-brand-ink/50">
+              Lokale tijd; wordt als UTC opgeslagen.{" "}
+              {settings.knockout_lock_utc
+                ? `Nu: ${fmtDateTimeAms(settings.knockout_lock_utc)} (${settings.knockout_lock_utc}).`
+                : "Nog niet gezet. Leeg laten = ongewijzigd."}
+            </span>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -240,16 +269,25 @@ export default async function BeheerPage({ searchParams }: { searchParams: Promi
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <form action={resolveR32Action}>
+            <button
+              disabled={!allGroupsDone}
+              className="rounded bg-brand-ink px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Bepaal R32-tegenstanders uit de standen
+            </button>
+          </form>
           <form action={setKnockoutLockFromR32Action}>
             <button className="rounded border px-3 py-2 text-sm">
               Stel lock = vroegste R32-aftrap
             </button>
           </form>
-          <span className="text-xs text-brand-ink/55">
-            Vult <code>knockout_lock_utc</code> uit de data; de handmatige override + open-schakelaar
-            staan hierboven bij Instellingen.
-          </span>
         </div>
+        <p className="mt-2 text-xs text-brand-ink/55">
+          De provider levert geen knock-out teams; deze knop leidt de 16 R32-paren af uit de eindstanden
+          (1e/2e + de acht beste nummers 3) en schrijft ze weg. Kan pas als álle groepswedstrijden
+          afgelopen zijn. Daarna <code>knockout_open</code> aanzetten bij Instellingen.
+        </p>
       </section>
 
       {/* prijzenpoule */}

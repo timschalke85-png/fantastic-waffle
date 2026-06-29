@@ -26,12 +26,14 @@ vi.mock("@/lib/settings", () => ({ setSetting }));
 vi.mock("@/lib/prijzenpoule-data", () => ({ loadEveningForFreeze }));
 vi.mock("@/lib/refresh", () => ({ refreshMatchData: vi.fn() }));
 vi.mock("@/lib/recompute", () => ({ recomputeScores: vi.fn() }));
+vi.mock("@/lib/r32-apply", () => ({ applyR32Resolution: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import {
   deleteParticipantAction,
   updateMatchAction,
+  updateSettingsAction,
   createEveningAction,
   activateEveningAction,
   setEveningMatchesAction,
@@ -78,6 +80,40 @@ describe("deleteParticipantAction", () => {
     await expect(deleteParticipantAction(fd({}))).rejects.toThrow("REDIRECT:/beheer?error=participant");
     expect(prisma.participant.findUnique).not.toHaveBeenCalled();
     expect(prisma.participant.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateSettingsAction (lock validation)", () => {
+  beforeEach(() => isAdmin.mockResolvedValue(true));
+
+  it("saves the knockout lock as UTC from an Amsterdam wall-clock time", async () => {
+    // 20:00 Amsterdam in July (CEST, +2) -> 18:00 UTC.
+    await expect(updateSettingsAction(fd({ knockout_lock_local: "2026-07-15T20:00" }))).rejects.toThrow(
+      "REDIRECT:/beheer?saved=settings",
+    );
+    expect(setSetting).toHaveBeenCalledWith("knockout_lock_utc", "2026-07-15T18:00:00.000Z");
+  });
+
+  it("rejects an invalid knockout lock instead of silently dropping it", async () => {
+    await expect(updateSettingsAction(fd({ knockout_lock_local: "20-07-2026 21:00" }))).rejects.toThrow(
+      "REDIRECT:/beheer?error=ko_lock_invalid",
+    );
+    expect(setSetting).not.toHaveBeenCalledWith("knockout_lock_utc", expect.anything());
+  });
+
+  it("rejects an invalid group lock instead of silently dropping it", async () => {
+    await expect(updateSettingsAction(fd({ group_lock_utc: "not-a-date" }))).rejects.toThrow(
+      "REDIRECT:/beheer?error=group_lock_invalid",
+    );
+    expect(setSetting).not.toHaveBeenCalledWith("group_lock_utc", expect.anything());
+  });
+
+  it("leaves the lock unchanged when the field is empty (and persists knockout_open)", async () => {
+    await expect(updateSettingsAction(fd({ knockout_open: "on" }))).rejects.toThrow(
+      "REDIRECT:/beheer?saved=settings",
+    );
+    expect(setSetting).toHaveBeenCalledWith("knockout_open", "true");
+    expect(setSetting).not.toHaveBeenCalledWith("knockout_lock_utc", expect.anything());
   });
 });
 
